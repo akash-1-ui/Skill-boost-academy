@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Course Playlist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/home.css" />
+  <link rel="stylesheet" href="/CSS/course_videos.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body class="student-dashboard course-player-page">
+  <header class="course-topbar">
+    <a class="back-link" href="student_home.html">
+      <i class="fas fa-arrow-left"></i>
+      Back to Dashboard
+    </a>
+    <div class="course-title-block">
+      <p class="course-kicker">Course Playlist</p>
+      <h1 id="courseTitle">Course Title</h1>
+      <p id="courseDescription" class="course-description">Loading course details...</p>
+    </div>
+    <div class="student-pill" id="studentNamePill"></div>
+  </header>
+
+  <main class="course-layout">
+    <aside class="playlist-panel">
+      <div class="playlist-header">
+        <div>
+          <h2>Lessons</h2>
+          <p class="playlist-subtitle">Pick a lesson to start playing.</p>
+        </div>
+        <span class="lesson-count" id="lessonCount">0</span>
+      </div>
+      <div class="playlist-items" id="videoList"></div>
+    </aside>
+
+    <section class="player-panel">
+      <div class="player-card">
+        <div class="player-header">
+          <h2 id="currentVideoTitle">Select a lesson to start</h2>
+          <span id="watchStatus" class="watch-status"></span>
+        </div>
+        <div class="player-shell">
+          <video id="coursePlayer" controls playsinline></video>
+          <div class="player-placeholder" id="playerPlaceholder">
+            Select a lesson to start learning.
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/course_videos.js"></script>
+</body>
+</html>

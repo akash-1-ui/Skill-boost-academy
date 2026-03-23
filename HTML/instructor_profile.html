@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instructor Profile</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/profile.css">
+</head>
+<body>
+
+<header class="profile-top">
+  <a class="back-link" href="instructor_home.html">&#8592; Back to Dashboard</a>
+  <div class="brand">
+    <span class="brand-mark">SB</span>
+    <div class="brand-text">
+      <span class="brand-title">SkillBoost</span>
+      <span class="brand-subtitle">Instructor Profile</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="profile-card">
+    <div class="profile-header">
+      <div class="image-container">
+        <img id="profileImage" src="/uploads/default-avatar.svg" alt="Profile Photo" onerror="this.src='/uploads/default-avatar.svg'">
+        <input type="file" id="uploadPhoto" accept="image/*" style="display:none;">
+        <button id="uploadBtn" type="button" class="upload-btn" onclick="document.getElementById('uploadPhoto').click()">Upload Photo</button>
+      </div>
+      <!-- Removed displayName, displayEmail, and displayCourse as requested -->
+    </div>
+
+    
+    <form class="profile-form">
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="name" placeholder="Enter your full name">
+      </div>
+
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="Enter your email">
+      </div>
+
+      <div class="form-group">
+        <label>Course Specialization</label>
+        <input type="text" id="course" placeholder="Enter your course specialization">
+      </div>
+
+      <button type="button" class="save-btn" onclick="saveProfile()">Save Profile</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
+  function normalizePhoto(value) {
+    const raw = String(value || '').trim();
+    if (!raw || raw === 'null' || raw === 'undefined') {
+      return DEFAULT_PROFILE_PHOTO;
+    }
+    if (raw.includes('default-profile-picture-avatar-user-icon-vector-46389216.jpg')) {
+      return DEFAULT_PROFILE_PHOTO;
+    }
+    return raw;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    const savedName = localStorage.getItem('instructorName') || '';
+    const savedEmail = localStorage.getItem('instructorEmail') || '';
+    const savedCourse = localStorage.getItem('instructorCourse') || '';
+    const savedPhoto = normalizePhoto(localStorage.getItem('instructorPhoto'));
+
+    document.getElementById('name').value = savedName;
+    document.getElementById('email').value = savedEmail;
+    document.getElementById('course').value = savedCourse;
+    document.getElementById('profileImage').src = savedPhoto;
+    localStorage.setItem('instructorPhoto', savedPhoto);
+  });
+
+  // Profile Photo Upload
+  document.getElementById('uploadPhoto').addEventListener('change', function(event){
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e){
+        document.getElementById('profileImage').src = e.target.result;
+        // Ensure upload button stays just below the photo after selection
+        const uploadBtn = document.getElementById('uploadBtn');
+        if (uploadBtn) {
+          uploadBtn.style.marginTop = '12px';
+          uploadBtn.style.display = 'block';
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // Save Profile Info
+  function saveProfile() {
+    const name = document.getElementById('name').value || "Your Name";
+    const email = document.getElementById('email').value || "Your Email";
+    const course = document.getElementById('course').value || "Your Course";
+    const bio = document.getElementById('bio') ? document.getElementById('bio').value : "";
+    const profileImage = normalizePhoto(document.getElementById('profileImage').src);
+
+    // Only send base64 image to backend
+    if (profileImage && email && profileImage.startsWith('data:image')) {
+      fetch('http://localhost:3000/api/instructor-photo-base64', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, photo: profileImage })
+      })
+      .then(res => res.json())
+      .then(() => {
+        // Save to localStorage only after backend confirms
+        localStorage.setItem('instructorName', name);
+        localStorage.setItem('instructorEmail', email);
+        localStorage.setItem('instructorCourse', course);
+        localStorage.setItem('instructorBio', bio);
+        localStorage.setItem('instructorPhoto', profileImage);
+        alert('Profile updated successfully!');
+        window.location.href = "instructor_home.html";
+      })
+      .catch(() => {
+        alert('Failed to update profile photo.');
+      });
+      return;
+    }
+    // If not a base64 image, just update localStorage and redirect
+    localStorage.setItem('instructorName', name);
+    localStorage.setItem('instructorEmail', email);
+    localStorage.setItem('instructorCourse', course);
+    localStorage.setItem('instructorBio', bio);
+    localStorage.setItem('instructorPhoto', profileImage);
+    alert('Profile updated successfully!');
+    window.location.href = "instructor_home.html";
+  }
+
+</script>
+
+</body>
+</html>

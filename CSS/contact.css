@@ -1,0 +1,269 @@
+.contact-shell,
+.contact-section {
+  width: min(var(--layout-max), calc(100% - (var(--page-gutter) * 2)));
+  margin-inline: auto;
+}
+
+.contact-shell {
+  padding-top: clamp(1rem, 2vw, 1.4rem);
+}
+
+.contact-hero,
+.contact-form,
+.contact-info,
+.thank-you-message {
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(8, 13, 34, 0.74);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(1rem);
+}
+
+.contact-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(16rem, 0.92fr);
+  gap: var(--stack-gap);
+  padding: clamp(1.25rem, 2.6vw, 1.9rem);
+  align-items: stretch;
+}
+
+.contact-hero-copy h1,
+.contact-info h2,
+.contact-form h2,
+.thank-you-message h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.contact-hero-copy h1 {
+  margin-top: 0.55rem;
+  font-size: clamp(2.15rem, 4vw, 3.3rem);
+  max-width: 12ch;
+}
+
+.contact-hero-copy p {
+  max-width: 38rem;
+  margin: 0.9rem 0 0;
+  color: var(--muted-strong);
+  line-height: 1.8;
+}
+
+.contact-hero-card {
+  padding: 1.15rem 1.2rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  display: grid;
+  align-content: center;
+  gap: 0.75rem;
+}
+
+.contact-hero-card strong {
+  font-size: 1.05rem;
+}
+
+.contact-hero-card p {
+  margin: 0;
+  color: var(--muted-strong);
+}
+
+.contact-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.contact-badges span,
+.detail-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.2rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.contact-section {
+  margin-top: 1.15rem;
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(18rem, 0.92fr);
+  gap: var(--stack-gap);
+  align-items: start;
+}
+
+.contact-form,
+.contact-info,
+.thank-you-message {
+  padding: clamp(1.15rem, 2.4vw, 1.8rem);
+}
+
+.section-heading {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1.1rem;
+}
+
+.contact-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.section-heading.left {
+  text-align: left;
+  margin-bottom: 0.4rem;
+}
+
+.section-heading.compact {
+  gap: 0.25rem;
+}
+
+.contact-form input,
+.contact-form textarea {
+  width: 100%;
+  min-height: var(--control-height);
+  padding: 0.88rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.contact-form textarea {
+  min-height: 11rem;
+  resize: vertical;
+}
+
+.contact-form input::placeholder,
+.contact-form textarea::placeholder {
+  color: rgba(203, 213, 225, 0.72);
+}
+
+.contact-form input:focus,
+.contact-form textarea:focus {
+  outline: none;
+  border-color: rgba(103, 232, 249, 0.42);
+  box-shadow: 0 0 0 0.22rem rgba(56, 189, 248, 0.12);
+}
+
+.contact-form button {
+  min-height: var(--control-height);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.98), rgba(139, 92, 246, 0.96));
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1rem 2rem rgba(56, 189, 248, 0.18);
+}
+
+.contact-form button:hover {
+  transform: translateY(-0.1rem);
+}
+
+.contact-info {
+  display: grid;
+  gap: 1rem;
+}
+
+.contact-detail-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.contact-detail {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.contact-detail strong {
+  font-size: 1rem;
+}
+
+.thank-you-message {
+  display: grid;
+  text-align: center;
+  gap: 0.9rem;
+}
+
+.thank-you-message p {
+  margin: 0;
+  color: var(--muted-strong);
+}
+
+.hamburger {
+  display: none;
+  flex-direction: column;
+  gap: 0.28rem;
+  cursor: pointer;
+}
+
+.hamburger span {
+  width: 1.6rem;
+  height: 0.14rem;
+  border-radius: 999px;
+  background: var(--text);
+}
+
+@media (max-width: 900px) {
+  .contact-hero,
+  .contact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-hero-copy h1 {
+    max-width: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .hamburger {
+    display: flex;
+  }
+
+  .nav-links {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    right: var(--page-gutter);
+    min-width: 14rem;
+    padding: 0.75rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(7, 12, 31, 0.92);
+    box-shadow: var(--shadow-soft);
+    flex-direction: column;
+    align-items: stretch;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-0.3rem);
+    transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+  }
+
+  .nav-links.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .contact-shell,
+  .contact-section {
+    width: calc(100% - 1.2rem);
+  }
+}

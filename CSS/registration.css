@@ -1,0 +1,12 @@
+.registration-form textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+.registration-form button[type='submit'] {
+  margin-top: 0.25rem;
+}
+
+.switch-link {
+  margin-top: 1rem;
+}

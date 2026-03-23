@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/home.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body class="student-dashboard">
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="brand">
+        <span class="brand-mark">SB</span>
+        <div class="brand-text">
+          <span class="brand-title">SkillBoost</span>
+          <span class="brand-subtitle">Student Studio</span>
+        </div>
+      </div>
+      <div class="search-bar topbar-search" id="searchBar">
+        <input type="text" placeholder="Search courses, topics, or skills..." />
+        <button type="button"><i class="fas fa-search"></i></button>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="status-pill">AI Learning</span>
+      <button class="profile-icon" id="studentProfileIcon" type="button" aria-label="Open menu">
+        <img class="topbar-avatar" id="studentProfilePhoto" src="/uploads/default-avatar.svg" alt="Profile Photo" onerror="this.src='/uploads/default-avatar.svg'" />
+      </button>
+    </div>
+  </header>
+
+  <nav id="sidebar" class="sidebar">
+    <ul>
+      <li><a href="student_home.html"><i class="fas fa-home"></i> Dashboard</a></li>
+      <li><a href="history.html"><i class="fas fa-play-circle"></i>History</a></li>
+      
+      <li><a href="contact.html"><i class="fas fa-envelope"></i> Contact</a></li>
+      <li>
+        <a href="/HTML/index.html" class="logout-link">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+      </li>
+     
+    </ul>
+  </nav>
+
+  <main class="content">
+    <section class="hero">
+      <div class="hero-text">
+        <p class="hero-kicker">Student Dashboard</p>
+        <h2 id="dashboard-title">Student home</h2>
+        <p>Continue your learning journey with guided recommendations, progress tracking, and focused study sessions.</p>
+        <div class="hero-actions">
+          <a href="#courses" class="hero-btn" id="exploreBtn">Explore Courses</a>
+          <button type="button" class="ghost-btn" data-profile-toggle>Profile</button>
+        </div>
+        <div class="hero-tags">
+          <span class="tag">Adaptive learning</span>
+          <span class="tag">Track hours</span>
+          <span class="tag">New releases weekly</span>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="hero-card">
+          <div class="hero-card-header">AI Learning Signal</div>
+          <div class="hero-card-metrics">
+            <div class="metric-block">
+              <span class="metric-label">Learning Time</span>
+              <span class="metric-value" id="timeSpentTotal">0m</span>
+            </div>
+            <div class="metric-grid">
+              <div class="mini-metric">
+                <span class="metric-label">Enrolled</span>
+                <span class="metric-value small" id="enrolledCount">0</span>
+              </div>
+              <div class="mini-metric">
+                <span class="metric-label">Catalog</span>
+                <span class="metric-value small" id="catalogCount">0</span>
+              </div>
+              <div class="mini-metric">
+                <span class="metric-label">Progress</span>
+                <span class="metric-value small" id="averageProgress">0%</span>
+              </div>
+            </div>
+          </div>
+          <div class="hero-card-footer">
+            <span class="metric-label">Study Mode</span>
+            <span class="metric-value signal" id="learningSignal">Ready</span>
+          </div>
+        </div>
+        <div class="hero-chip-row">
+          <div class="hero-floating-chip chip-one">Neural Focus</div>
+          <div class="hero-floating-chip chip-two">Smart pacing</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="focus-row">
+      <article class="focus-card">
+        <span class="focus-index">01</span>
+        <h3>Set a weekly goal</h3>
+        <p>Plan 3 focused sessions and let your progress sync automatically.</p>
+        <span class="focus-tag">Stay consistent</span>
+      </article>
+      <article class="focus-card">
+        <span class="focus-index">02</span>
+        <h3>Finish what you start</h3>
+        <p>Pick one course and follow it end-to-end to unlock the next level.</p>
+        <span class="focus-tag">Build momentum</span>
+      </article>
+      <article class="focus-card">
+        <span class="focus-index">03</span>
+        <h3>Get support fast</h3>
+        <p>Have a question? Reach instructors directly from your profile.</p>
+        <span class="focus-tag">Need help</span>
+      </article>
+    </section>
+
+    <section class="course-section" id="courses">
+      <div class="section-header">
+        <div>
+          <p class="section-kicker">Course Discovery</p>
+          <h2>Available Courses</h2>
+          <p class="section-note">Explore premium lessons with progress-aware cards and quick access to your next session.</p>
+        </div>
+        <div class="section-badge" id="courseCatalogBadge">0 courses</div>
+      </div>
+      <div class="course-grid-shell">
+        <div class="course-grid" id="courseGrid" aria-live="polite">
+          <!-- Courses will be dynamically loaded here -->
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="profile-drawer" id="profileDrawer" data-role="student" aria-hidden="true">
+    <div class="drawer-header">
+      <div>
+        <p class="drawer-eyebrow">Profile</p>
+        <h3>Update Student Profile</h3>
+      </div>
+      <button type="button" class="drawer-close" data-profile-close>Close</button>
+    </div>
+    <div class="drawer-body">
+      <div class="profile-photo">
+        <img id="profileImage" src="/uploads/default-avatar.svg" alt="Profile Photo" onerror="this.src='/uploads/default-avatar.svg'">
+        <input type="file" id="profilePhotoUpload" accept="image/*">
+        <button type="button" class="upload-btn" onclick="document.getElementById('profilePhotoUpload').click()">Upload Photo</button>
+      </div>
+      <form id="profileForm" class="profile-form">
+        <div class="form-group">
+          <label for="profileName">Full Name</label>
+          <input type="text" id="profileName" placeholder="Enter your full name">
+        </div>
+        <div class="form-group">
+          <label for="profileEmail">Email</label>
+          <input type="email" id="profileEmail" placeholder="Enter your email" readonly>
+        </div>
+        <div class="form-group">
+          <label for="profileExtra">Branch</label>
+          <input type="text" id="profileExtra" placeholder="Enter your branch">
+        </div>
+        <button type="submit" class="save-btn">Save Profile</button>
+        <p id="profileStatus" class="profile-status"></p>
+      </form>
+      <div class="profile-danger">
+        <button type="button" id="terminateStudent" class="danger-btn">Terminate Account</button>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-overlay" id="profileOverlay"></div>
+
+  <script src="/js/profile_drawer.js"></script>
+  <script src="/js/account_actions.js"></script>
+  <script>
+    const toggleBtn = document.getElementById('studentProfileIcon');
+    const sidebar = document.getElementById('sidebar');
+    const exploreBtn = document.getElementById('exploreBtn');
+    const searchBar = document.getElementById('searchBar');
+
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sidebar.classList.toggle('show');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
+        sidebar.classList.remove('show');
+      }
+    });
+
+    exploreBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      searchBar.classList.remove('hidden');
+      const searchInput = document.querySelector('#searchBar input');
+      if (searchInput) searchInput.focus();
+      document.getElementById('courses').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    let allCourses = [];
+
+    async function fetchCourses() {
+      try {
+        const studentEmail = localStorage.getItem('studentEmail') || '';
+        const query = studentEmail ? `?studentEmail=${encodeURIComponent(studentEmail)}` : '';
+        const response = await fetch(`http://localhost:3000/api/courses${query}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch courses (${response.status})`);
+        }
+        const data = await response.json();
+        allCourses = Array.isArray(data) ? data : [];
+        renderCourses(allCourses);
+        updateStudentStats();
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+        allCourses = [];
+        updateCourseCatalogBadge(0, 0);
+        const courseGrid = document.getElementById('courseGrid');
+        if (courseGrid) {
+          courseGrid.innerHTML = `
+            <div class="no-courses-message">
+              <h3>Unable to load courses</h3>
+              <p>Please refresh the page or try again when the course server is available.</p>
+            </div>
+          `;
+        }
+      }
+    }
+
+    const API_BASE = 'http://localhost:3000';
+    function resolveAssetPath(rawPath, fallbackBase) {
+      if (!rawPath) return '';
+      let value = String(rawPath).trim();
+      if (!value) return '';
+      value = value.replace(/\\/g, '/');
+      if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:') || value.startsWith('blob:')) {
+        return value;
+      }
+      const base = API_BASE || window.location.origin;
+      const normalizedFallback = fallbackBase.startsWith('/') ? fallbackBase : `/${fallbackBase}`;
+      if (/^[a-zA-Z]:\//.test(value)) {
+        const filename = value.split('/').pop();
+        return `${base}${normalizedFallback}/${filename}`;
+      }
+      if (value.startsWith('/')) {
+        return `${base}${value}`;
+      }
+      return `${base}${normalizedFallback}/${value}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function updateCourseCatalogBadge(visibleCount, totalCount = visibleCount) {
+      const badge = document.getElementById('courseCatalogBadge');
+      if (!badge) return;
+      const safeVisible = Number.isFinite(visibleCount) ? visibleCount : 0;
+      const safeTotal = Number.isFinite(totalCount) ? totalCount : safeVisible;
+      badge.textContent = safeVisible === safeTotal
+        ? `${safeTotal} ${safeTotal === 1 ? 'course' : 'courses'}`
+        : `${safeVisible} of ${safeTotal} courses`;
+    }
+
+    function buildStudentCourseUrl(courseId, resume = false) {
+      const params = new URLSearchParams({ courseId: String(courseId) });
+      if (resume) {
+        params.set('resume', '1');
+      }
+      return `course_videos.html?${params.toString()}`;
+    }
+
+    function openStudentCoursePage(courseId, resume = false) {
+      if (!courseId) return;
+      window.location.href = buildStudentCourseUrl(courseId, resume);
+    }
+
+    function renderCourses(courses) {
+      const courseGrid = document.getElementById('courseGrid');
+      if (!courseGrid) return;
+      courseGrid.innerHTML = '';
+      updateCourseCatalogBadge(courses.length, allCourses.length || courses.length);
+      if (courses.length === 0) {
+        courseGrid.innerHTML = `
+          <div class="no-courses-message">
+            <h3>No courses found</h3>
+            <p>Try a different search or check back for new releases.</p>
+          </div>
+        `;
+        return;
+      }
+      courses.forEach(course => {
+        const courseCard = document.createElement('div');
+        courseCard.classList.add('course-card');
+        courseCard.tabIndex = 0;
+        courseCard.setAttribute('role', 'button');
+        courseCard.setAttribute('aria-label', `Open ${course.title || 'course'}`);
+        const totalVideos = Number(course.video_count || 0);
+        const watchedVideos = Number(course.watched_count || 0);
+        const percent = totalVideos > 0 ? Math.round((watchedVideos / totalVideos) * 100) : 0;
+        const coverPath = resolveAssetPath(course.cover_path || course.cover, '/uploads/covers');
+        const title = escapeHtml(course.title || 'Untitled course');
+        const subtitle = escapeHtml(
+          (course.description || course.category || 'Continue your learning journey with guided lessons.').trim()
+        );
+        const coverMarkup = coverPath
+          ? `<img class="course-cover" src="${coverPath}" alt="${title}" loading="lazy" onerror="this.closest('.media-container').classList.add('is-fallback'); this.remove();">`
+          : '<div class="course-cover-fallback">No cover</div>';
+
+        courseCard.innerHTML = `
+          <div class="media-container">${coverMarkup}</div>
+          <div class="course-card-body">
+            <h3>${title}</h3>
+            <p class="course-card-subtitle">${subtitle}</p>
+            <div class="course-completion-row">
+              <span>Completion</span>
+              <strong>${percent}%</strong>
+            </div>
+            <div class="course-progress-block">
+              <div class="course-progress" aria-hidden="true">
+                <span style="width: ${percent}%"></span>
+              </div>
+            </div>
+          </div>
+        `;
+
+        courseCard.addEventListener('click', () => {
+          openStudentCoursePage(course.id);
+        });
+
+        courseCard.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openStudentCoursePage(course.id);
+          }
+        });
+
+        courseGrid.appendChild(courseCard);
+      });
+    }
+
+    function updateStudentStats() {
+      const enrolledCountEl = document.getElementById('enrolledCount');
+      const timeSpentEl = document.getElementById('timeSpentTotal');
+      const catalogCountEl = document.getElementById('catalogCount');
+      const averageProgressEl = document.getElementById('averageProgress');
+      const learningSignalEl = document.getElementById('learningSignal');
+      const studentEmail = localStorage.getItem('studentEmail') || 'guest';
+      const enrolledCourses = JSON.parse(localStorage.getItem(`enrolledCourses_${studentEmail}`) || '[]');
+      const courseProgress = allCourses.map((course) => {
+        const totalVideos = Number(course.video_count || 0);
+        const watchedVideos = Number(course.watched_count || 0);
+        return totalVideos > 0 ? Math.round((watchedVideos / totalVideos) * 100) : 0;
+      });
+      const averageProgress = courseProgress.length
+        ? Math.round(courseProgress.reduce((sum, percent) => sum + percent, 0) / courseProgress.length)
+        : 0;
+      let totalSeconds = 0;
+
+      if (enrolledCountEl) {
+        enrolledCountEl.textContent = enrolledCourses.length;
+      }
+
+      if (timeSpentEl) {
+        const timeSpentData = JSON.parse(localStorage.getItem(`timeSpent_${studentEmail}`) || '{}');
+        totalSeconds = Object.values(timeSpentData).reduce((sum, value) => sum + Number(value || 0), 0);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const timeLabel = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        timeSpentEl.textContent = timeLabel;
+      }
+
+      if (catalogCountEl) {
+        catalogCountEl.textContent = allCourses.length;
+      }
+
+      if (averageProgressEl) {
+        averageProgressEl.textContent = `${averageProgress}%`;
+      }
+
+      if (learningSignalEl) {
+        let signal = 'Ready';
+        if (totalSeconds >= 10800 || averageProgress >= 70) {
+          signal = 'Deep Focus';
+        } else if (totalSeconds >= 3600 || averageProgress >= 35) {
+          signal = 'In Motion';
+        } else if (allCourses.length > 0) {
+          signal = 'Warming Up';
+        }
+        learningSignalEl.textContent = signal;
+      }
+    }
+
+    // Search functionality
+    const searchInput = document.querySelector('#searchBar input');
+    const searchBtn = document.querySelector('#searchBar button');
+
+    searchBtn.addEventListener('click', () => {
+      const query = searchInput.value.trim().toLowerCase();
+      const filtered = allCourses.filter(course =>
+        (course.title || '').toLowerCase().includes(query) ||
+        (course.description || '').toLowerCase().includes(query)
+      );
+      renderCourses(filtered);
+    });
+
+    // Optional: search as you type
+    searchInput.addEventListener('input', () => {
+      const query = searchInput.value.trim().toLowerCase();
+      const filtered = allCourses.filter(course =>
+        (course.title || '').toLowerCase().includes(query) ||
+        (course.description || '').toLowerCase().includes(query)
+      );
+      renderCourses(filtered);
+    });
+
+    // Call fetchCourses on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchCourses();
+      updateStudentStats();
+    });
+
+    const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
+    function normalizePhoto(value) {
+      const raw = String(value || '').trim();
+      if (!raw || raw === 'null' || raw === 'undefined') {
+        return DEFAULT_PROFILE_PHOTO;
+      }
+      if (raw.includes('default-profile-picture-avatar-user-icon-vector-46389216.jpg')) {
+        return DEFAULT_PROFILE_PHOTO;
+      }
+      return raw;
+    }
+
+    // Set student profile photo and name in top right, unique per student
+    const studentEmail = localStorage.getItem('studentEmail');
+    let studentPhoto = DEFAULT_PROFILE_PHOTO;
+    const dashboardTitle = document.getElementById('dashboard-title');
+    let studentName = '';
+    // Always use only the current student's info
+    if (studentEmail) {
+      studentPhoto = normalizePhoto(localStorage.getItem(`studentPhoto_${studentEmail}`));
+      studentName = localStorage.getItem(`studentName_${studentEmail}`) || '';
+    }
+    if (dashboardTitle && studentName) {
+      dashboardTitle.textContent = `${studentName}'s Dashboard`;
+    } else if (dashboardTitle) {
+      dashboardTitle.textContent = 'Student home';
+    }
+    document.getElementById('studentProfilePhoto').src = normalizePhoto(studentPhoto);
+
+    // Always update localStorage with the latest profile from backend for this student only
+    if (studentEmail) {
+      fetch(`http://localhost:3000/api/student-profile?email=${encodeURIComponent(studentEmail)}`)
+        .then(res => res.json())
+        .then(profile => {
+          const normalizedPhoto = normalizePhoto(profile?.photo);
+          document.getElementById('studentProfilePhoto').src = normalizedPhoto;
+          localStorage.setItem(`studentPhoto_${studentEmail}`, normalizedPhoto);
+          if (profile && profile.name && dashboardTitle) {
+            dashboardTitle.textContent = `${profile.name}'s Dashboard`;
+            localStorage.setItem(`studentName_${studentEmail}`, profile.name);
+          }
+        })
+        .catch(() => {
+          document.getElementById('studentProfilePhoto').src = DEFAULT_PROFILE_PHOTO;
+          localStorage.setItem(`studentPhoto_${studentEmail}`, DEFAULT_PROFILE_PHOTO);
+        });
+    } else {
+      document.getElementById('studentProfilePhoto').src = DEFAULT_PROFILE_PHOTO;
+    }
+
+    // Save student photo to database if updated in localStorage (for instant update)
+    function syncStudentPhotoToDB() {
+      if (studentEmail) {
+        const photo = localStorage.getItem(`studentPhoto_${studentEmail}`);
+        const normalizedPhoto = normalizePhoto(photo);
+        if (normalizedPhoto && normalizedPhoto !== DEFAULT_PROFILE_PHOTO) {
+          fetch('http://localhost:3000/api/student-photo-base64', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: studentEmail, photo: normalizedPhoto })
+          });
+        }
+      }
+    }
+    // Sync photo on page load
+    syncStudentPhotoToDB();
+  </script>
+</body>
+</html>

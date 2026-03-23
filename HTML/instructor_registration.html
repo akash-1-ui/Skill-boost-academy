@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Instructor Registration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/auth.css" />
+  <link rel="stylesheet" href="/CSS/registration.css" />
+</head>
+<body class="auth-body">
+  <main class="auth-shell">
+    <section class="auth-intro">
+      <a class="back-link" href="login.html?role=instructor">Back to Login</a>
+      <div>
+        <p class="eyebrow">Instructor Registration</p>
+        <h1>Publish courses inside a studio that feels ready for launch.</h1>
+        <p class="auth-intro-copy">Build your instructor profile, create polished course libraries, and step into a dashboard designed for clarity, control, and growth.</p>
+      </div>
+      <div class="auth-feature-grid">
+        <article class="auth-feature-card">
+          <strong>Course operations</strong>
+          <p>Create compact course cards, upload lessons, and manage content without visual clutter.</p>
+        </article>
+        <article class="auth-feature-card">
+          <strong>Performance visibility</strong>
+          <p>See learner engagement, watch activity, and course performance in one aligned workspace.</p>
+        </article>
+      </div>
+      <div class="auth-signal">
+        <div>
+          <strong>Built for creators</strong>
+          <p>Onboarding flows now mirror the same premium system used across the dashboards and content tools.</p>
+        </div>
+        <span class="auth-signal-badge">Instructor Flow</span>
+      </div>
+    </section>
+
+    <section class="auth-panel">
+      <div class="registration-container">
+        <div class="auth-header">
+          <p class="eyebrow">Instructor Registration</p>
+          <h2>Build with SkillBoost</h2>
+          <p class="subtext">Share expertise, publish courses, and grow your audience.</p>
+        </div>
+        <form id="instructorRegistrationForm" class="registration-form">
+          <label for="fullname">Full Name</label>
+          <input type="text" id="fullname" name="fullname" placeholder="Your full name" required>
+
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="Your email address" required>
+
+          <label for="phone">Phone Number</label>
+          <input type="tel" id="phone" name="phone" placeholder="Your phone number" required>
+
+          <label for="expertise">Area of Expertise</label>
+          <input type="text" id="expertise" name="expertise" placeholder="AI, Cybersecurity..." required>
+
+          <label for="password">Create Password</label>
+          <div class="password-field">
+            <input type="password" id="password" name="password" placeholder="Choose a password" required>
+            <button type="button" class="password-toggle" onclick="togglePassword('password', this)">Show</button>
+          </div>
+
+          <button type="submit">Register as Instructor</button>
+        </form>
+
+        <div id="success-message" class="success-message" style="display: none;">
+          Registration Successful! Redirecting to Instructor Dashboard...
+        </div>
+
+        <div class="switch-link">
+          Are you a student? <a href="registration.html">Register here</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/instructor_registration.js"></script>
+  <script>
+  function togglePassword(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (input.type === 'password') {
+      input.type = 'text';
+      btn.textContent = 'Hide';
+    } else {
+      input.type = 'password';
+      btn.textContent = 'Show';
+    }
+  }
+  </script>
+
+</body>
+</html>

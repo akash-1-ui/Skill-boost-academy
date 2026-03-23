@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Student Profile</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/profile.css">
+</head>
+<body>
+
+<header class="profile-top">
+  <a class="back-link" href="student_home.html">&#8592; Back to Dashboard</a>
+  <div class="brand">
+    <span class="brand-mark">SB</span>
+    <div class="brand-text">
+      <span class="brand-title">SkillBoost</span>
+      <span class="brand-subtitle">Student Profile</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="profile-card">
+    <div class="profile-header">
+      <div class="image-container">
+        <img id="profileImage" src="/uploads/default-avatar.svg" alt="Profile Photo" onerror="this.src='/uploads/default-avatar.svg'">
+        <input type="file" id="uploadPhoto" accept="image/*" style="display:none;">
+        <button type="button" class="upload-btn" onclick="document.getElementById('uploadPhoto').click()">Upload Photo</button>
+      </div>
+      <!-- Removed displayName, displayEmail, and displayCourse as requested -->
+    </div>
+
+    <form class="profile-form">
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="name" placeholder="Enter your full name">
+      </div>
+
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="Enter your email">
+      </div>
+
+      <div class="form-group">
+        <label>Branch</label>
+        <input type="text" id="branch" placeholder="Enter your branch">
+      </div>
+
+      <button type="button" class="save-btn" onclick="saveProfile()">Save Profile</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
+  function normalizePhoto(value) {
+    const raw = String(value || '').trim();
+    if (!raw || raw === 'null' || raw === 'undefined') {
+      return DEFAULT_PROFILE_PHOTO;
+    }
+    if (raw.includes('default-profile-picture-avatar-user-icon-vector-46389216.jpg')) {
+      return DEFAULT_PROFILE_PHOTO;
+    }
+    return raw;
+  }
+
+  // Load profile info from localStorage if available
+  window.onload = function() {
+    const email = localStorage.getItem('studentEmail') || '';
+    // Use email as key for all profile fields
+    const name = localStorage.getItem(`studentName_${email}`) || '';
+    const branch = localStorage.getItem(`studentBranch_${email}`) || '';
+    const photo = normalizePhoto(localStorage.getItem(`studentPhoto_${email}`));
+    document.getElementById('name').value = name;
+    document.getElementById('email').value = email;
+    document.getElementById('branch').value = branch;
+    document.getElementById('profileImage').src = photo;
+    localStorage.setItem(`studentPhoto_${email}`, photo);
+    // Removed display updates for a cleaner look
+  };
+
+  // Profile Photo Upload
+  document.getElementById('uploadPhoto').addEventListener('change', function(event){
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e){
+        document.getElementById('profileImage').src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // Save Profile Info
+  function saveProfile() {
+    const name = document.getElementById('name').value || '';
+    const branch = document.getElementById('branch').value || '';
+    const email = document.getElementById('email').value || "";
+    const profileImage = normalizePhoto(document.getElementById('profileImage').src);
+
+    localStorage.setItem('studentEmail', email);
+    localStorage.setItem(`studentName_${email}`, name);
+    localStorage.setItem(`studentBranch_${email}`, branch);
+
+    // Only send base64 image to backend
+    if (profileImage && email && profileImage.startsWith('data:image')) {
+      fetch('http://localhost:3000/api/student-photo-base64', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, photo: profileImage })
+      })
+      .then(res => res.json())
+      .then(() => {
+        localStorage.setItem(`studentPhoto_${email}`, profileImage);
+        alert('Profile photo updated successfully!');
+        window.location.href = "student_home.html";
+      })
+      .catch(() => {
+        alert('Failed to update photo in database.');
+      });
+      return;
+    }
+    // If not a base64 image, just update localStorage and redirect
+    localStorage.setItem(`studentPhoto_${email}`, profileImage);
+    alert('Profile photo updated locally!');
+    window.location.href = "student_home.html";
+  }
+</script>
+
+</body>
+</html>

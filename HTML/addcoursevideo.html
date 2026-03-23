@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Course Video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/addcourse.css" />
+</head>
+<body>
+  <a href="instructor_home.html" class="back-btn">&#8592; Back</a>
+  <div class="page-shell">
+    <header class="page-header">
+      <p class="eyebrow">Instructor Studio</p>
+      <h1>Add Course Video</h1>
+      <p class="subtext">Select a course you created and upload lesson videos for your learners.</p>
+    </header>
+
+    <div class="form-grid single-column">
+      <section class="form-card">
+        <div class="card-header">
+          <span class="step-pill">Step 2</span>
+          <h2>Upload Lessons</h2>
+          <p>Attach lesson videos to an existing course to make it ready for learners.</p>
+        </div>
+        <form id="uploadVideoForm" enctype="multipart/form-data">
+          <label for="courseSelect">Select Course</label>
+          <select id="courseSelect" name="course_id" required>
+            <option value="">Choose a course</option>
+          </select>
+
+          <label for="lessonTitle">Lesson Title</label>
+          <input type="text" id="lessonTitle" name="title" placeholder="e.g., Introduction" />
+
+          <label for="lessonVideo">Lesson Video</label>
+          <input type="file" id="lessonVideo" name="video" accept="video/*" required />
+
+          <input type="hidden" id="video_instructor_id" name="instructor_id" />
+
+          <button type="submit">Upload Video</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script src="/js/addcourse.js"></script>
+</body>
+</html>

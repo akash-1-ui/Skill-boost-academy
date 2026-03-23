@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instructor Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/CSS/instructorhome.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <span class="brand-mark">SB</span>
+            <div class="brand-text">
+                <span class="brand-title">SkillBoost</span>
+                <span class="brand-subtitle">Instructor Studio</span>
+            </div>
+        </div>
+        <div class="sidebar-actions">
+        </div>
+        <ul class="sidebar-links">
+            <li><a href="#dashboard" data-view-link="dashboard" class="active" aria-current="page">Dashboard</a></li>
+            <li><a href="#add-course" data-view-link="add-course">Add Course</a></li>
+            <li><a href="#add-course-video" data-view-link="add-course-video">Add Course Video</a></li>
+            <li><a href="#" data-profile-toggle>Profile</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <button id="logoutBtn" type="button" class="sidebar-logout">Logout</button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <div class="dashboard-container">
+            <section class="view-panel is-active dashboard-view" id="dashboard" data-view="dashboard">
+                <header class="dashboard-header">
+                    <div>
+                        <p class="kicker">Instructor Dashboard</p>
+                        <h1>Welcome, <span id="instructorName">Instructor</span>!</h1>
+                        <p class="dashboard-subtitle">Track your course performance and learner engagement in one place.</p>
+                    </div>
+                    <div class="header-actions">
+                        <button type="button" class="profile-icon-btn" data-profile-toggle aria-label="Open profile">
+                            <img id="instructorProfilePhoto" src="/uploads/default-avatar.svg" alt="Profile Photo" onerror="this.src='/uploads/default-avatar.svg'">
+                        </button>
+                    </div>
+                </header>
+
+                <div class="dashboard-stats">
+                    <div class="stat-card">
+                        <h3>Total Courses</h3>
+                        <p id="totalCourses">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total Students</h3>
+                        <p id="totalStudents">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Average Enrollment</h3>
+                        <p id="avgEnrollment">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total Watch Hours</h3>
+                        <p id="totalWatchHours">0</p>
+                    </div>
+                </div>
+
+                <section class="insights-section">
+                    <h2>Performance Insights</h2>
+                    <div class="insight-grid">
+                        <div class="insight-card">
+                            <h4>Top Course</h4>
+                            <p id="topCourseName">No courses yet</p>
+                        </div>
+                        <div class="insight-card">
+                            <h4>Latest Upload</h4>
+                            <p id="latestUpload">No uploads yet</p>
+                        </div>
+                        <div class="insight-card">
+                            <h4>Courses with 0 Enrollment</h4>
+                            <p id="zeroEnrollCount">0</p>
+                        </div>
+                        <div class="insight-card">
+                            <h4>Highest Watched Course</h4>
+                            <p id="highestWatchedCourse">No watch data</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="courses-section">
+                    <h2>Top Watched Courses</h2>
+                    <table class="course-table" id="topWatchedTable">
+                        <thead>
+                            <tr>
+                                <th>Course</th>
+                                <th>Watch Hours</th>
+                                <th>Watch Records</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </section>
+
+                <section class="courses-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Your Courses</h2>
+                            <p class="section-subtitle">Compact course cards with quick controls for editing, previewing, and lesson management.</p>
+                        </div>
+                        <div class="section-actions">
+                            <span class="section-badge" id="courseLibraryBadge">0 live courses</span>
+                            <button type="button" class="ghost-btn" data-view-link="add-course">Add Course</button>
+                        </div>
+                    </div>
+                    <div class="course-grid-shell">
+                        <div class="course-grid" id="instructorCoursesGrid" aria-live="polite" aria-busy="true"></div>
+                    </div>
+                </section>
+            </section>
+
+            <section class="courses-section dashboard-section view-panel" id="add-course" data-view="add-course">
+                <div class="section-header">
+                    <div>
+                        <p class="section-kicker">Step 1</p>
+                        <h2>Add Course</h2>
+                        <p class="section-subtitle">Create the course details here, then upload lessons in the next section.</p>
+                    </div>
+                </div>
+                <div class="form-shell">
+                    <div class="form-card">
+                        <form id="createCourseForm" class="dashboard-form" action="http://localhost:3000/submit-course" method="POST" enctype="multipart/form-data">
+                            <label for="title">Course Title</label>
+                            <input type="text" id="title" name="title" required />
+
+                            <label for="duration">Course Duration (in hours)</label>
+                            <input type="number" id="duration" name="duration" required min="1" step="0.1" />
+
+                            <label for="cover">Cover Page</label>
+                            <input type="file" id="cover" name="cover" accept="image/*" required />
+                            <p class="form-hint" id="coverEditHint" hidden>Leave the cover empty to keep the current image.</p>
+
+                            <label for="category">Category</label>
+                            <input type="text" id="category" name="category" required />
+
+                            <label for="difficulty">Difficulty</label>
+                            <select id="difficulty" name="difficulty" required>
+                                <option value="">Select difficulty</option>
+                                <option value="Beginner">Beginner</option>
+                                <option value="Intermediate">Intermediate</option>
+                                <option value="Advanced">Advanced</option>
+                            </select>
+
+                            <input type="hidden" id="instructor_id" name="instructor_id" />
+
+                            <label for="description">Description</label>
+                            <textarea id="description" name="description" required placeholder="Enter a brief course description..."></textarea>
+
+                            <button type="submit" id="courseSubmitBtn">Create Course</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <section class="courses-section dashboard-section view-panel" id="add-course-video" data-view="add-course-video">
+                <div class="section-header">
+                    <div>
+                        <p class="section-kicker">Step 2</p>
+                        <h2>Add Course Video</h2>
+                        <p class="section-subtitle">Select a course you created and upload lesson videos for learners.</p>
+                    </div>
+                </div>
+                <div class="form-shell">
+                    <div class="form-card">
+                        <p class="form-hint" id="manageCourseNote">Managing: <strong id="manageCourseTitle">Select a course</strong></p>
+                        <form id="uploadVideoForm" class="dashboard-form" enctype="multipart/form-data">
+                            <label for="courseSelect">Select Course</label>
+                            <select id="courseSelect" name="course_id" required>
+                                <option value="">Choose a course</option>
+                            </select>
+
+                            <label for="lessonTitle">Lesson Title</label>
+                            <input type="text" id="lessonTitle" name="title" placeholder="e.g., Introduction" />
+
+                            <label for="lessonVideo">Lesson Video</label>
+                            <input type="file" id="lessonVideo" name="video" accept="video/*" required />
+
+                            <input type="hidden" id="video_instructor_id" name="instructor_id" />
+
+                            <button type="submit">Upload Video</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <div class="profile-drawer" id="profileDrawer" data-role="instructor" aria-hidden="true">
+        <div class="drawer-header">
+            <div>
+                <p class="drawer-eyebrow">Profile</p>
+                <h3>Update Instructor Profile</h3>
+            </div>
+            <button type="button" class="drawer-close" data-profile-close>Close</button>
+        </div>
+        <div class="drawer-body">
+            <div class="profile-photo">
+                <img id="profileImage" src="/uploads/default-avatar.svg" alt="Profile Photo" onerror="this.src='/uploads/default-avatar.svg'">
+                <input type="file" id="profilePhotoUpload" accept="image/*">
+                <button type="button" class="upload-btn" onclick="document.getElementById('profilePhotoUpload').click()">Upload Photo</button>
+            </div>
+            <form id="profileForm" class="profile-form">
+                <div class="form-group">
+                    <label for="profileName">Full Name</label>
+                    <input type="text" id="profileName" placeholder="Enter your full name">
+                </div>
+                <div class="form-group">
+                    <label for="profileEmail">Email</label>
+                    <input type="email" id="profileEmail" placeholder="Enter your email" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="profileExtra">Course Specialization</label>
+                    <input type="text" id="profileExtra" placeholder="Enter your specialization">
+                </div>
+                <button type="submit" class="save-btn">Save Profile</button>
+                <p id="profileStatus" class="profile-status"></p>
+            </form>
+            <div class="profile-danger">
+                <button id="terminateInstructor" type="button" class="danger-btn">Terminate Account</button>
+            </div>
+        </div>
+    </div>
+    <div class="drawer-overlay" id="profileOverlay"></div>
+
+    <script src="/js/profile_drawer.js"></script>
+    <script src="/js/account_actions.js"></script>
+    <script src="/js/addcourse.js"></script>
+    <script>
+        const instructorId = localStorage.getItem('instructorId');
+        const instructorName = localStorage.getItem('instructorName');
+        const instructorPhoto = localStorage.getItem('instructorPhoto');
+        const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
+        const API_BASE = 'http://localhost:3000';
+
+        function normalizePhoto(value) {
+            const raw = String(value || '').trim();
+            if (!raw || raw === 'null' || raw === 'undefined') {
+                return DEFAULT_PROFILE_PHOTO;
+            }
+            if (raw.includes('default-profile-picture-avatar-user-icon-vector-46389216.jpg')) {
+                return DEFAULT_PROFILE_PHOTO;
+            }
+            return raw;
+        }
+
+        if (!instructorId) {
+            window.location.href = 'login.html?role=instructor';
+        }
+
+        document.getElementById('instructorName').textContent = instructorName || 'Instructor';
+        const instructorPhotoEl = document.getElementById('instructorProfilePhoto');
+        if (instructorPhotoEl) {
+            instructorPhotoEl.src = normalizePhoto(instructorPhoto);
+        }
+        const drawerPhotoEl = document.getElementById('profileImage');
+        if (drawerPhotoEl) {
+            drawerPhotoEl.src = normalizePhoto(instructorPhoto);
+        }
+
+        const viewLinks = document.querySelectorAll('[data-view-link]');
+        const viewPanels = document.querySelectorAll('[data-view]');
+        const viewIds = new Set(Array.from(viewPanels, (panel) => panel.dataset.view));
+
+        function setActiveView(viewId, options = {}) {
+            const target = viewIds.has(viewId) ? viewId : 'dashboard';
+            viewPanels.forEach((panel) => {
+                panel.classList.toggle('is-active', panel.dataset.view === target);
+            });
+            if (target === 'add-course' && typeof window.clearInstructorCourseEditor === 'function') {
+                window.clearInstructorCourseEditor();
+            }
+            viewLinks.forEach((link) => {
+                const isActive = link.dataset.viewLink === target;
+                link.classList.toggle('active', isActive);
+                if (isActive) {
+                    link.setAttribute('aria-current', 'page');
+                } else {
+                    link.removeAttribute('aria-current');
+                }
+            });
+            if (options.syncHash !== false) {
+                const newHash = `#${target}`;
+                if (location.hash !== newHash) {
+                    history.replaceState(null, '', newHash);
+                }
+            }
+            if (options.scroll !== false) {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        viewLinks.forEach((link) => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                setActiveView(link.dataset.viewLink);
+            });
+        });
+
+        window.addEventListener('hashchange', () => {
+            const hashView = location.hash.replace('#', '');
+            if (hashView) {
+                setActiveView(hashView, { syncHash: false });
+            }
+        });
+
+        const initialView = location.hash ? location.hash.replace('#', '') : 'dashboard';
+        setActiveView(initialView || 'dashboard', { syncHash: false, scroll: false });
+
+        function formatDate(value) {
+            if (!value) return 'N/A';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return 'N/A';
+            return date.toLocaleDateString();
+        }
+
+        function updateCourseLibraryBadge(total) {
+            const badge = document.getElementById('courseLibraryBadge');
+            if (!badge) return;
+            const count = Number(total || 0);
+            badge.textContent = `${count} ${count === 1 ? 'live course' : 'live courses'}`;
+        }
+
+        function renderTopWatchedLoadingState() {
+            const tbody = document.querySelector('#topWatchedTable tbody');
+            if (!tbody) return;
+            tbody.innerHTML = `
+                <tr class="table-loading-row">
+                    <td><span class="table-skeleton"></span></td>
+                    <td><span class="table-skeleton short"></span></td>
+                    <td><span class="table-skeleton short"></span></td>
+                </tr>
+                <tr class="table-loading-row">
+                    <td><span class="table-skeleton"></span></td>
+                    <td><span class="table-skeleton short"></span></td>
+                    <td><span class="table-skeleton short"></span></td>
+                </tr>
+            `;
+        }
+
+        function renderTopWatchedCourses(topWatchedCourses) {
+            const tbody = document.querySelector('#topWatchedTable tbody');
+            tbody.innerHTML = '';
+
+            if (!Array.isArray(topWatchedCourses) || topWatchedCourses.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No watch analytics available yet</td></tr>';
+                return;
+            }
+
+            topWatchedCourses.forEach((course) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${course.title}</td>
+                    <td>${course.totalWatchHours}</td>
+                    <td>${course.watchRecords}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function resolveAssetPath(rawPath, fallbackBase) {
+            if (!rawPath) return '';
+            let value = String(rawPath).trim();
+            if (!value) return '';
+            value = value.replace(/\\/g, '/');
+            if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:') || value.startsWith('blob:')) {
+                return value;
+            }
+
+            const base = API_BASE || window.location.origin;
+            const normalizedFallback = fallbackBase.startsWith('/') ? fallbackBase : `/${fallbackBase}`;
+
+            if (/^[a-zA-Z]:\//.test(value)) {
+                const filename = value.split('/').pop();
+                return `${base}${normalizedFallback}/${filename}`;
+            }
+
+            if (value.startsWith('/')) {
+                return `${base}${value}`;
+            }
+
+            return `${base}${normalizedFallback}/${value}`;
+        }
+
+        function openCourseManager(course) {
+            if (!course) return;
+            setActiveView('add-course-video');
+            const manageTitle = document.getElementById('manageCourseTitle');
+            if (manageTitle) {
+                manageTitle.textContent = course.title || 'Selected course';
+            }
+            if (typeof window.setInstructorCourseSelection === 'function') {
+                window.setInstructorCourseSelection(course.id);
+            } else {
+                const select = document.getElementById('courseSelect');
+                if (select) {
+                    select.value = String(course.id);
+                }
+            }
+        }
+
+        function openCourseEditor(course) {
+            if (!course) return;
+            setActiveView('add-course');
+            if (typeof window.openCourseEditor === 'function') {
+                window.openCourseEditor(course);
+            } else {
+                const title = document.getElementById('title');
+                const duration = document.getElementById('duration');
+                const category = document.getElementById('category');
+                const difficulty = document.getElementById('difficulty');
+                const description = document.getElementById('description');
+                if (title) title.value = course.title || '';
+                if (duration) duration.value = course.duration || '';
+                if (category) category.value = course.category || '';
+                if (difficulty) difficulty.value = course.difficulty || '';
+                if (description) description.value = course.description || '';
+            }
+        }
+
+        function openCourseViewer(course) {
+            if (!course) return;
+            window.location.href = `instructor_course_videos.html?courseId=${course.id}`;
+        }
+
+        function renderCourseSkeletons(count = 4) {
+            const grid = document.getElementById('instructorCoursesGrid');
+            if (!grid) return;
+            grid.setAttribute('aria-busy', 'true');
+            grid.innerHTML = '';
+            for (let index = 0; index < count; index += 1) {
+                const card = document.createElement('article');
+                card.className = 'course-card course-card-skeleton';
+                card.innerHTML = `
+                    <div class="course-cover">
+                        <div class="course-cover-skeleton"></div>
+                    </div>
+                    <div class="course-card-body">
+                        <span class="skeleton-line tiny"></span>
+                        <span class="skeleton-line title"></span>
+                        <div class="course-meta">
+                            <span class="skeleton-pill"></span>
+                            <span class="skeleton-pill"></span>
+                        </div>
+                        <div class="course-progress-block">
+                            <div class="course-progress-head">
+                                <span class="skeleton-line short"></span>
+                                <span class="skeleton-line micro"></span>
+                            </div>
+                            <div class="course-progress"><span style="width: 45%;"></span></div>
+                        </div>
+                        <div class="course-actions">
+                            <span class="skeleton-button"></span>
+                            <span class="skeleton-button secondary"></span>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            }
+        }
+
+        function getCourseProgress(course, maxEnrolled, maxVideos, maxWatchRecords) {
+            const enrolledRatio = maxEnrolled > 0 ? Number(course.enrolled_students || 0) / maxEnrolled : 0;
+            const videoRatio = maxVideos > 0 ? Number(course.video_count || 0) / maxVideos : 0;
+            const watchRatio = maxWatchRecords > 0 ? Number(course.watch_record_count || 0) / maxWatchRecords : 0;
+            const completenessSignals = [
+                course.cover_path || course.cover,
+                course.description,
+                course.duration,
+                course.category,
+                course.difficulty
+            ].filter((value) => String(value || '').trim()).length;
+            const completenessRatio = completenessSignals / 5;
+            const progress = Math.round((completenessRatio * 0.35 + videoRatio * 0.25 + enrolledRatio * 0.25 + watchRatio * 0.15) * 100);
+            return Math.max(progress, completenessSignals > 0 ? 18 : 0);
+        }
+
+        function renderCourses(courses) {
+            const grid = document.getElementById('instructorCoursesGrid');
+            if (!grid) return;
+            grid.setAttribute('aria-busy', 'false');
+            grid.innerHTML = '';
+            updateCourseLibraryBadge(Array.isArray(courses) ? courses.length : 0);
+
+            if (!Array.isArray(courses) || courses.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state empty-state-courses">
+                        <div class="empty-state-icon">+</div>
+                        <h3>No courses yet</h3>
+                        <p>Build your first premium course card and start publishing lessons for learners.</p>
+                        <button type="button" class="ghost-btn empty-state-btn">Create Course</button>
+                    </div>
+                `;
+                const emptyStateBtn = grid.querySelector('.empty-state-btn');
+                if (emptyStateBtn) {
+                    emptyStateBtn.addEventListener('click', () => setActiveView('add-course'));
+                }
+                return;
+            }
+
+            const maxEnrolled = Math.max(...courses.map((course) => Number(course.enrolled_students || 0)), 0);
+            const maxVideos = Math.max(...courses.map((course) => Number(course.video_count || 0)), 0);
+            const maxWatchRecords = Math.max(...courses.map((course) => Number(course.watch_record_count || 0)), 0);
+
+            courses.forEach((course) => {
+                const card = document.createElement('article');
+                card.classList.add('course-card');
+
+                const coverPath = resolveAssetPath(course.cover_path || course.cover, '/uploads/covers');
+                const coverMarkup = coverPath
+                    ? `<img src="${coverPath}" alt="${course.title || 'Course cover'}" loading="lazy" onerror="this.closest('.course-cover').classList.add('is-fallback'); this.remove();">`
+                    : '<div class="course-cover-fallback">No cover</div>';
+                const lessonCount = Number(course.video_count || 0);
+                const watchRecords = Number(course.watch_record_count || 0);
+                const enrolledStudents = Number(course.enrolled_students || 0);
+                const progress = getCourseProgress(course, maxEnrolled, maxVideos, maxWatchRecords);
+
+                card.innerHTML = `
+                    <div class="course-cover">${coverMarkup}</div>
+                    <div class="course-card-body">
+                        <div class="course-card-top">
+                            <div>
+                                <p class="course-eyebrow">${course.category || 'Course Studio'}</p>
+                                <h3>${course.title || 'Untitled Course'}</h3>
+                            </div>
+                            <span class="course-status-badge">${enrolledStudents} ${enrolledStudents === 1 ? 'student' : 'students'}</span>
+                        </div>
+                        <p class="course-card-prompt">Click to open course options</p>
+                        <div class="course-card-details">
+                            <div class="course-meta">
+                                <span>${course.difficulty || 'All levels'}</span>
+                                <span>${course.duration || 'Self-paced'}</span>
+                                <span>${lessonCount} ${lessonCount === 1 ? 'lesson' : 'lessons'}</span>
+                            </div>
+                            <div class="course-progress-block">
+                                <div class="course-progress-head">
+                                    <span>Course readiness</span>
+                                    <strong>${progress}%</strong>
+                                </div>
+                                <div class="course-progress">
+                                    <span style="width: ${progress}%"></span>
+                                </div>
+                                <p class="course-hint">${watchRecords} ${watchRecords === 1 ? 'watch record' : 'watch records'} tracked</p>
+                            </div>
+                            <div class="course-actions">
+                                <button type="button" class="course-btn manage" data-action="manage">Manage</button>
+                                <button type="button" class="course-btn view" data-action="view">View</button>
+                                <button type="button" class="course-btn edit" data-action="edit">Edit</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                card.tabIndex = 0;
+                card.setAttribute('role', 'button');
+                card.setAttribute('aria-expanded', 'false');
+
+                card.addEventListener('click', (event) => {
+                    const actionBtn = event.target.closest('button');
+                    if (actionBtn) {
+                        const action = actionBtn.dataset.action;
+                        if (action === 'manage') {
+                            openCourseManager(course);
+                        } else if (action === 'edit') {
+                            openCourseEditor(course);
+                        } else {
+                            openCourseViewer(course);
+                        }
+                        return;
+                    }
+                    const isExpanded = card.classList.contains('is-expanded');
+                    grid.querySelectorAll('.course-card.is-expanded').forEach((item) => {
+                        item.classList.remove('is-expanded');
+                        item.setAttribute('aria-expanded', 'false');
+                    });
+                    if (!isExpanded) {
+                        card.classList.add('is-expanded');
+                        card.setAttribute('aria-expanded', 'true');
+                    }
+                });
+
+                card.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    card.click();
+                });
+
+                grid.appendChild(card);
+            });
+        }
+
+        async function loadInstructorDashboard() {
+            renderCourseSkeletons();
+            renderTopWatchedLoadingState();
+            try {
+                const response = await fetch(`http://localhost:3000/api/instructor-dashboard/${instructorId}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load dashboard data');
+                }
+
+                const metrics = data.metrics || {};
+                document.getElementById('totalCourses').textContent = metrics.totalCourses || 0;
+                document.getElementById('totalStudents').textContent = metrics.totalStudents || 0;
+                document.getElementById('avgEnrollment').textContent = metrics.averageEnrollment || 0;
+                document.getElementById('totalWatchHours').textContent = metrics.totalWatchHours || 0;
+
+                document.getElementById('latestUpload').textContent = formatDate(metrics.latestUpload);
+                document.getElementById('zeroEnrollCount').textContent = metrics.zeroEnrollmentCourses || 0;
+
+                const topCourse = data.topCourse;
+                document.getElementById('topCourseName').textContent = topCourse
+                    ? `${topCourse.title} (${topCourse.enrolled_students} students)`
+                    : 'No courses yet';
+
+                const highestWatched = Array.isArray(data.topWatchedCourses) && data.topWatchedCourses.length > 0
+                    ? data.topWatchedCourses[0]
+                    : null;
+                document.getElementById('highestWatchedCourse').textContent = highestWatched
+                    ? `${highestWatched.title} (${highestWatched.totalWatchHours} hrs)`
+                    : 'No watch data';
+
+                renderTopWatchedCourses(data.topWatchedCourses || []);
+                renderCourses(data.courses || []);
+            } catch (error) {
+                console.error('Error fetching instructor dashboard:', error);
+                const grid = document.getElementById('instructorCoursesGrid');
+                const tbody = document.querySelector('#topWatchedTable tbody');
+                updateCourseLibraryBadge(0);
+                if (grid) {
+                    grid.setAttribute('aria-busy', 'false');
+                    grid.innerHTML = `
+                        <div class="empty-state empty-state-courses">
+                            <div class="empty-state-icon">!</div>
+                            <h3>Dashboard unavailable</h3>
+                            <p>We could not load your courses right now. Please try again in a moment.</p>
+                        </div>
+                    `;
+                }
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Unable to load watch analytics right now.</td></tr>';
+                }
+                alert(error.message || 'Failed to load dashboard details. Please try again later.');
+            }
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            localStorage.removeItem('instructorId');
+            localStorage.removeItem('instructorName');
+            localStorage.removeItem('instructorPhoto');
+            localStorage.removeItem('instructorEmail');
+            localStorage.removeItem('instructorCourse');
+            localStorage.removeItem('instructorBio');
+            window.location.href = 'index.html';
+        });
+
+        async function deleteCourse(courseId) {
+            if (!confirm('Are you sure you want to delete this course?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:3000/api/courses/${courseId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    const payload = await response.json().catch(() => ({}));
+                    throw new Error(payload.error || 'Failed to delete course');
+                }
+
+                await loadInstructorDashboard();
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert(error.message || 'Failed to delete course. Please try again.');
+            }
+        }
+
+        function getQueryParam(key) {
+            return new URLSearchParams(window.location.search).get(key);
+        }
+
+        function asPositiveInt(value) {
+            const parsed = Number(value);
+            if (!Number.isInteger(parsed) || parsed <= 0) {
+                return null;
+            }
+            return parsed;
+        }
+
+        async function handleCourseEditRequest() {
+            const editCourseId = asPositiveInt(getQueryParam('editCourseId'));
+            if (!editCourseId) return;
+            try {
+                const response = await fetch(`http://localhost:3000/api/course/${editCourseId}`);
+                if (!response.ok) {
+                    throw new Error('Course not found');
+                }
+                const course = await response.json();
+                openCourseEditor(course);
+            } catch (error) {
+                console.error('Failed to load course for edit:', error);
+                alert('Unable to load the course for editing. Please try again.');
+            }
+        }
+
+        function handleCourseVideoRequest() {
+            const manageCourseId = asPositiveInt(getQueryParam('manageCourseId'));
+            if (!manageCourseId) return;
+            setActiveView('add-course-video');
+            if (typeof window.setInstructorCourseSelection === 'function') {
+                window.setInstructorCourseSelection(manageCourseId);
+            }
+        }
+
+        window.addEventListener('instructor:courseChanged', () => {
+            loadInstructorDashboard();
+        });
+
+        loadInstructorDashboard();
+
+        window.addEventListener('load', () => {
+            handleCourseEditRequest();
+            handleCourseVideoRequest();
+        });
+    </script>
+</body>
+</html>

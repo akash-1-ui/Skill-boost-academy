@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Course</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/addcourse.css" />
+</head>
+<body>
+  <a href="instructor_home.html" class="back-btn">&#8592; Back</a>
+  <div class="page-shell">
+    <header class="page-header">
+      <p class="eyebrow">Instructor Studio</p>
+      <h1>Add Course</h1>
+      <p class="subtext">Create the course details here, then upload lessons from the Add Course Video page.</p>
+    </header>
+
+    <div class="form-grid single-column">
+      <section class="form-card">
+        <div class="card-header">
+          <span class="step-pill">Step 1</span>
+          <h2>Course Details</h2>
+          <p>Publish the core information that students see on the catalog.</p>
+        </div>
+        <form id="createCourseForm" action="http://localhost:3000/submit-course" method="POST" enctype="multipart/form-data">
+          <label for="title">Course Title</label>
+          <input type="text" id="title" name="title" required />
+
+          <label for="duration">Course Duration (in hours)</label>
+          <input type="number" id="duration" name="duration" required min="1" step="0.1" />
+
+          <label for="cover">Cover Page</label>
+          <input type="file" id="cover" name="cover" accept="image/*" required />
+
+          <label for="category">Category</label>
+          <input type="text" id="category" name="category" required />
+
+          <label for="difficulty">Difficulty</label>
+          <select id="difficulty" name="difficulty" required>
+            <option value="">Select difficulty</option>
+            <option value="Beginner">Beginner</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+          </select>
+
+          <input type="hidden" id="instructor_id" name="instructor_id" />
+
+          <label for="description">Description</label>
+          <textarea id="description" name="description" required placeholder="Enter a brief course description..."></textarea>
+
+          <button type="submit">Create Course</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script src="/js/addcourse.js"></script>
+</body>
+</html>

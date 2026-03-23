@@ -1,0 +1,125 @@
+.course-title-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.course-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.course-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 0.8rem 1.6rem rgba(3, 7, 18, 0.16);
+}
+
+.course-action-btn.primary {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.98), rgba(139, 92, 246, 0.96));
+}
+
+.course-action-btn.ghost {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.course-action-btn.danger {
+  background: linear-gradient(135deg, rgba(251, 113, 133, 0.96), rgba(239, 68, 68, 0.92));
+}
+
+.player-header {
+  align-items: flex-start;
+}
+
+.player-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.video-action-btn {
+  min-height: 2.4rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.88rem;
+  box-shadow: 0 0.8rem 1.6rem rgba(3, 7, 18, 0.16);
+}
+
+.video-action-btn.edit {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.video-action-btn.delete {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(251, 113, 133, 0.96), rgba(239, 68, 68, 0.92));
+}
+
+.video-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.modal-close {
+  min-height: 2.35rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 1120px) {
+  .course-title-block {
+    align-items: flex-start;
+  }
+
+  .course-action-row {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 700px) {
+  .video-actions {
+    width: 100%;
+  }
+}

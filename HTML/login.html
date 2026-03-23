@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkillBoost Academy Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/auth.css" />
+  <link rel="stylesheet" href="/CSS/login.css" />
+</head>
+<body class="auth-body login-page">
+  <main class="auth-shell">
+    <section class="auth-intro">
+      <a class="back-link" href="index.html#access">Back to home</a>
+      <div>
+        <p class="eyebrow">SkillBoost Access</p>
+        <h1>Return to a learning workspace that already feels finished.</h1>
+        <p class="auth-intro-copy">Move between student and instructor experiences with cleaner forms, sharper hierarchy, and role-based flows that feel product-ready.</p>
+      </div>
+      <div class="auth-feature-grid">
+        <article class="auth-feature-card">
+          <strong>Student Studio</strong>
+          <p>Resume courses, track completion, and stay in motion with a progress-first dashboard.</p>
+        </article>
+        <article class="auth-feature-card">
+          <strong>Instructor Studio</strong>
+          <p>Manage courses, upload lessons, and review performance from a focused workspace.</p>
+        </article>
+      </div>
+      <div class="auth-signal">
+        <div>
+          <strong>Faster re-entry</strong>
+          <p>Forgot-password recovery, role switching, and cleaner forms reduce friction before work begins.</p>
+        </div>
+        <span class="auth-signal-badge">AI-ready UI</span>
+      </div>
+    </section>
+
+    <section class="auth-panel">
+      <div class="login-container">
+        <div class="login-header">
+          <p class="eyebrow">Access Portal</p>
+          <h2>Welcome back</h2>
+          <p class="subtext">Choose your role and continue where you left off.</p>
+        </div>
+
+        <div class="role-tabs" role="tablist" aria-label="Login role">
+          <button type="button" class="role-tab" data-role="student" aria-selected="false">Student</button>
+          <button type="button" class="role-tab" data-role="instructor" aria-selected="true">Instructor</button>
+        </div>
+
+        <form id="studentLoginForm" class="login-form" autocomplete="on">
+          <div class="form-group">
+            <label for="studentEmail">Student Email</label>
+            <input type="email" id="studentEmail" name="email" placeholder="Enter your student email" autocomplete="email" required />
+          </div>
+
+          <div class="form-group">
+            <label for="studentPassword">Password</label>
+            <div class="password-field">
+              <input type="password" id="studentPassword" name="password" placeholder="Enter your password" autocomplete="current-password" required />
+              <button type="button" class="password-toggle" onclick="togglePassword('studentPassword', this)">Show</button>
+            </div>
+          </div>
+
+          <div class="helper-links">
+            <a href="#" class="forgot-password-link" data-role="student">Forgot password?</a>
+          </div>
+
+          <button type="submit">Login as Student</button>
+
+          <p class="switch-role">
+            Teaching on SkillBoost? <a href="login.html?role=instructor">Instructor login</a>
+          </p>
+        </form>
+
+        <form id="instructorLoginForm" class="login-form" autocomplete="on">
+          <div class="form-group">
+            <label for="instructorEmail">Instructor Email</label>
+            <input type="email" id="instructorEmail" name="email" placeholder="Enter your instructor email" autocomplete="email" required />
+          </div>
+
+          <div class="form-group">
+            <label for="instructorPassword">Password</label>
+            <div class="password-field">
+              <input type="password" id="instructorPassword" name="password" placeholder="Enter your password" autocomplete="current-password" required />
+              <button type="button" class="password-toggle" onclick="togglePassword('instructorPassword', this)">Show</button>
+            </div>
+          </div>
+
+          <div class="helper-links">
+            <a href="#" class="forgot-password-link" data-role="instructor">Forgot password?</a>
+          </div>
+
+          <button type="submit">Login as Instructor</button>
+
+          <p class="switch-role">
+            Want to start learning? <a href="login.html?role=student">Student login</a>
+          </p>
+        </form>
+
+        <p id="registerLink" class="register-link">
+          Need an account? <a id="registerHref" href="registration.html">Register here</a>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <div id="forgotPasswordModal" class="forgot-modal" aria-hidden="true">
+    <div class="forgot-modal-content" role="dialog" aria-modal="true" aria-labelledby="forgotPasswordTitle">
+      <button type="button" id="forgotCloseBtn" class="forgot-close" aria-label="Close">&times;</button>
+      <h3 id="forgotPasswordTitle">Reset your password</h3>
+      <p class="forgot-subtitle">Use your registered mobile number to receive a verification code.</p>
+
+      <div id="forgotStepRequest" class="forgot-step">
+        <label for="forgotRole">Role</label>
+        <select id="forgotRole" name="role">
+          <option value="student">Student</option>
+          <option value="instructor">Instructor</option>
+        </select>
+
+        <label for="forgotPhone">Mobile Number</label>
+        <input type="tel" id="forgotPhone" name="phone" placeholder="Enter your registered mobile number" inputmode="numeric" />
+
+        <button type="button" id="sendResetCodeBtn">Send Code</button>
+      </div>
+
+      <div id="forgotStepVerify" class="forgot-step" style="display: none;">
+        <label for="forgotOtp">Verification Code</label>
+        <input type="text" id="forgotOtp" name="otp" placeholder="Enter the 6-digit code" inputmode="numeric" maxlength="6" />
+
+        <label for="forgotNewPassword">New Password</label>
+        <div class="password-field">
+          <input type="password" id="forgotNewPassword" name="newPassword" placeholder="Create a new password" />
+          <button type="button" class="password-toggle" onclick="togglePassword('forgotNewPassword', this)">Show</button>
+        </div>
+
+        <label for="forgotConfirmPassword">Confirm Password</label>
+        <div class="password-field">
+          <input type="password" id="forgotConfirmPassword" name="confirmPassword" placeholder="Confirm your new password" />
+          <button type="button" class="password-toggle" onclick="togglePassword('forgotConfirmPassword', this)">Show</button>
+        </div>
+
+        <button type="button" id="resetPasswordBtn">Reset Password</button>
+      </div>
+
+      <p id="forgotStatus" class="forgot-status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <script>
+    function togglePassword(inputId, button) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      button.textContent = isPassword ? 'Hide' : 'Show';
+    }
+  </script>
+  <script src="/js/login.js"></script>
+</body>
+</html>

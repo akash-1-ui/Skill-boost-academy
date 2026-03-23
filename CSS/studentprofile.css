@@ -1,0 +1,123 @@
+/* Student Profile Styles */
+body {
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #007bff 0%, #e3f0ff 100%);
+  margin: 0;
+  padding: 0;
+  color: #222;
+}
+.container {
+  max-width: 420px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+.profile-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(44, 62, 80, 0.08);
+  padding: 32px 24px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.profile-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.image-container {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  margin-bottom: 10px;
+}
+#profileImage {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #007bff;
+  background: #e8eaf6;
+}
+.upload-btn {
+  display: inline-block;
+  margin-top: 8px;
+  background: #007bff;
+  color: #fff;
+  padding: 5px 16px;
+  border-radius: 20px;
+  font-size: 0.95em;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.upload-btn:hover {
+  background: #0056b3;
+}
+#uploadPhoto {
+  display: none;
+}
+.profile-header h2 {
+  margin: 8px 0 2px 0;
+  font-size: 1.5em;
+  color: #2e3a59;
+  font-weight: 600;
+}
+.profile-header p {
+  margin: 0 0 2px 0;
+  color: #555;
+  font-size: 1em;
+}
+.profile-form {
+  width: 100%;
+  margin-top: 10px;
+}
+.form-group {
+  margin-bottom: 16px;
+}
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: #2e3a59;
+  font-weight: 500;
+}
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+  font-size: 1em;
+  background: #f8fafc;
+  color: #222;
+  outline: none;
+  transition: border 0.2s;
+}
+.form-group input:focus,
+.form-group textarea:focus {
+  border-color: #007bff;
+}
+.save-btn {
+  width: 100%;
+  background: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 0;
+  font-size: 1.1em;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background 0.2s;
+}
+.save-btn:hover {
+  background: #0056b3;
+}
+@media (max-width: 600px) {
+  .container {
+    padding: 0 4px;
+  }
+  .profile-card {
+    padding: 18px 6px 16px 6px;
+  }
+}

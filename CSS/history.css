@@ -1,0 +1,56 @@
+.history-section {
+  padding: clamp(1.2rem, 2.4vw, 1.8rem);
+  border-radius: clamp(1.35rem, 2vw, 1.75rem);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)),
+    rgba(8, 13, 34, 0.68);
+  box-shadow: var(--shadow);
+  backdrop-filter: var(--backdrop);
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: clamp(0.9rem, 1.6vw, 1.15rem);
+}
+
+.history-card {
+  min-height: 100%;
+  gap: 0.75rem;
+  padding: 0.95rem;
+  border-radius: clamp(1rem, 1.7vw, 1.25rem);
+  border-color: rgba(145, 173, 255, 0.2);
+}
+
+.history-card .media-container {
+  aspect-ratio: 16 / 10;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.history-card h3 {
+  font-size: 1.02rem;
+  line-height: 1.45;
+}
+
+.history-card p {
+  color: var(--muted-strong);
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.no-history-message {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  padding: clamp(1.4rem, 2.4vw, 1.8rem);
+  min-block-size: clamp(12rem, 24vw, 14rem);
+  display: grid;
+  place-content: center;
+}
+
+@media (max-width: 900px) {
+  .history-section {
+    padding: 1.2rem;
+  }
+}

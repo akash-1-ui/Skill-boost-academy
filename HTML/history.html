@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>History - Viewed Videos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/home.css" />
+  <link rel="stylesheet" href="/CSS/history.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body class="student-dashboard student-history-page">
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="brand">
+        <span class="brand-mark">SB</span>
+        <div class="brand-text">
+          <span class="brand-title">SkillBoost</span>
+          <span class="brand-subtitle">Student Studio</span>
+        </div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="status-pill">History</span>
+      <button class="profile-icon" id="studentProfileIcon" type="button" aria-label="Open menu">
+        <img class="topbar-avatar" id="studentProfilePhoto" src="/uploads/default-avatar.svg" alt="Profile Photo" onerror="this.src='/uploads/default-avatar.svg'" />
+      </button>
+    </div>
+  </header>
+
+  <nav id="sidebar" class="sidebar">
+    <ul>
+      <li><a href="student_home.html"><i class="fas fa-home"></i> Dashboard</a></li>
+      <li><a href="history.html" class="active"><i class="fas fa-play-circle"></i> History</a></li>
+      <li><a href="contact.html"><i class="fas fa-envelope"></i> Contact</a></li>
+      <li><a href="#" data-profile-toggle><i class="fas fa-user"></i> Profile</a></li>
+      <li>
+        <a href="/HTML/index.html" class="logout-link">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <main class="content">
+    <section class="history-section">
+      <div class="section-header">
+        <div>
+          <p class="hero-kicker">Learning Record</p>
+          <h2>Viewed Videos</h2>
+          <p>Keep track of the lessons you have already watched.</p>
+        </div>
+      </div>
+      <div class="history-grid" id="historyGrid">
+        <!-- Viewed videos will be dynamically loaded here -->
+      </div>
+    </section>
+  </main>
+
+  <div class="profile-drawer" id="profileDrawer" data-role="student" aria-hidden="true">
+    <div class="drawer-header">
+      <div>
+        <p class="drawer-eyebrow">Profile</p>
+        <h3>Update Student Profile</h3>
+      </div>
+      <button type="button" class="drawer-close" data-profile-close>Close</button>
+    </div>
+    <div class="drawer-body">
+      <div class="profile-photo">
+        <img id="profileImage" src="/uploads/default-avatar.svg" alt="Profile Photo" onerror="this.src='/uploads/default-avatar.svg'">
+        <input type="file" id="profilePhotoUpload" accept="image/*">
+        <button type="button" class="upload-btn" onclick="document.getElementById('profilePhotoUpload').click()">Upload Photo</button>
+      </div>
+      <form id="profileForm" class="profile-form">
+        <div class="form-group">
+          <label for="profileName">Full Name</label>
+          <input type="text" id="profileName" placeholder="Enter your full name">
+        </div>
+        <div class="form-group">
+          <label for="profileEmail">Email</label>
+          <input type="email" id="profileEmail" placeholder="Enter your email" readonly>
+        </div>
+        <div class="form-group">
+          <label for="profileExtra">Branch</label>
+          <input type="text" id="profileExtra" placeholder="Enter your branch">
+        </div>
+        <button type="submit" class="save-btn">Save Profile</button>
+        <p id="profileStatus" class="profile-status"></p>
+      </form>
+      <div class="profile-danger">
+        <button type="button" id="terminateStudent" class="danger-btn">Terminate Account</button>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-overlay" id="profileOverlay"></div>
+
+  <script src="/js/profile_drawer.js"></script>
+  <script src="/js/account_actions.js"></script>
+  <script>
+    const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
+    function normalizePhoto(value) {
+      const raw = String(value || '').trim();
+      if (!raw || raw === 'null' || raw === 'undefined') {
+        return DEFAULT_PROFILE_PHOTO;
+      }
+      if (raw.includes('default-profile-picture-avatar-user-icon-vector-46389216.jpg')) {
+        return DEFAULT_PROFILE_PHOTO;
+      }
+      return raw;
+    }
+
+    // Set student profile photo in top right, unique per student
+    const studentEmail = localStorage.getItem('studentEmail');
+    let studentPhoto = DEFAULT_PROFILE_PHOTO;
+    if (studentEmail) {
+      studentPhoto = normalizePhoto(localStorage.getItem(`studentPhoto_${studentEmail}`));
+    }
+    document.getElementById('studentProfilePhoto').src = normalizePhoto(studentPhoto);
+
+    // Menu toggle logic (profile avatar opens sidebar)
+    const toggleBtn = document.getElementById('studentProfileIcon');
+    const sidebar = document.getElementById('sidebar');
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sidebar.classList.toggle('show');
+    });
+    document.addEventListener('click', (e) => {
+      if (!sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
+        sidebar.classList.remove('show');
+      }
+    });
+    function resolveAssetPath(rawPath, fallbackBase) {
+      if (!rawPath) return '';
+      const value = String(rawPath).trim();
+      if (!value) return '';
+      if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:') || value.startsWith('/')) {
+        return value;
+      }
+      return `${fallbackBase}/${value}`;
+    }
+
+    // Load viewed videos from backend for the current student
+    async function loadHistory() {
+      const historyGrid = document.getElementById('historyGrid');
+      const studentEmail = localStorage.getItem('studentEmail') || 'guest';
+      try {
+        // Only use the email, not email + id
+        const res = await fetch(`http://localhost:3000/api/course-views/${encodeURIComponent(studentEmail)}`);
+        const viewed = await res.json();
+        if (!Array.isArray(viewed) || viewed.length === 0) {
+          historyGrid.innerHTML = '<div class="no-history-message">No videos viewed yet.</div>';
+          return;
+        }
+        historyGrid.innerHTML = '';
+        viewed.forEach(course => {
+          const card = document.createElement('div');
+          card.classList.add('history-card');
+          const coverSrc = resolveAssetPath(course.cover_path || course.cover, '/uploads/covers');
+          card.innerHTML = `
+            <div class="media-container">
+              <img src="${coverSrc}" alt="Cover Image" class="course-cover" />
+            </div>
+            <h3>${course.title}</h3>
+            <p>Category: ${course.category}</p>
+            <p>About the course: ${course.description || 'No description available.'}</p>
+            <p>Instructor: ${course.instructor_name || 'Unknown'}</p>
+          `;
+          historyGrid.appendChild(card);
+        });
+      } catch (err) {
+        historyGrid.innerHTML = '<div class="no-history-message">Failed to load history.</div>';
+      }
+    }
+    document.addEventListener('DOMContentLoaded', loadHistory);
+  </script>
+</body>
+</html>

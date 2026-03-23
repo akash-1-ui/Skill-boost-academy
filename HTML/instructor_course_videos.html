@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instructor Course Videos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/home.css" />
+  <link rel="stylesheet" href="/CSS/course_videos.css" />
+  <link rel="stylesheet" href="/CSS/instructor_course_videos.css" />
+</head>
+<body class="instructor-course-page">
+  <header class="course-topbar">
+    <a class="back-link" href="instructor_home.html">
+      <span class="back-icon" aria-hidden="true">&#8592;</span>
+      Back to Dashboard
+    </a>
+    <div class="course-title-block">
+      <p class="course-kicker">Instructor Course</p>
+      <h1 id="courseTitle">Course Title</h1>
+      <p id="courseDescription" class="course-description">Loading course details...</p>
+      <div class="course-action-row">
+        <a class="course-action-btn primary" id="addVideoBtn" href="#">Add Video</a>
+        <a class="course-action-btn ghost" id="editCourseBtn" href="#">Edit Course</a>
+        <button class="course-action-btn danger" id="deleteCourseBtn" type="button">Delete Course</button>
+      </div>
+    </div>
+    <div class="student-pill" id="instructorPill"></div>
+  </header>
+
+  <main class="course-layout">
+    <aside class="playlist-panel">
+      <div class="playlist-header">
+        <div>
+          <h2>Lessons</h2>
+          <p class="playlist-subtitle">Select a lesson to preview or edit.</p>
+        </div>
+        <span class="lesson-count" id="lessonCount">0</span>
+      </div>
+      <div class="playlist-items" id="videoList"></div>
+    </aside>
+
+    <section class="player-panel">
+      <div class="player-card">
+        <div class="player-header">
+          <div class="player-title">
+            <h2 id="currentVideoTitle">Select a lesson to start</h2>
+            <span id="videoStatus" class="watch-status"></span>
+          </div>
+          <div class="video-actions">
+            <button type="button" class="video-action-btn edit" id="editVideoBtn">Edit Video</button>
+            <button type="button" class="video-action-btn delete" id="deleteVideoBtn">Delete Video</button>
+          </div>
+        </div>
+        <div class="player-shell">
+          <video id="coursePlayer" controls playsinline></video>
+          <div class="player-placeholder" id="playerPlaceholder">
+            Select a lesson to start previewing.
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="videoEditModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="editVideoHeading">
+      <div class="modal-header">
+        <h3 id="editVideoHeading">Edit Video</h3>
+        <button type="button" class="modal-close" id="closeEditModal">Close</button>
+      </div>
+      <form id="videoEditForm" class="modal-form">
+        <label for="editVideoTitle">Lesson title</label>
+        <input type="text" id="editVideoTitle" name="title" required />
+
+        <label for="editVideoFile">Replace video (optional)</label>
+        <input type="file" id="editVideoFile" name="video" accept="video/*" />
+
+        <div class="modal-actions">
+          <button type="button" class="modal-btn ghost" id="cancelEditVideo">Cancel</button>
+          <button type="submit" class="modal-btn primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/instructor_course_videos.js"></script>
+</body>
+</html>
