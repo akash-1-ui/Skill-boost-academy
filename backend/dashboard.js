@@ -11,7 +11,6 @@ fetch(`http://localhost:3000/api/courses/${instructorId}`)
         <tr>
           <td>${course.title}</td>
           <td>${course.category}</td>
-          <td>${course.difficulty}</td>
           <td>${course.enrolled_students}</td>
           <td>
             <button onclick="editCourse(${course.id})">Edit</button>

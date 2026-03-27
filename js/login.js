@@ -250,13 +250,22 @@ studentForm.addEventListener('submit', async (e) => {
       fetch(`http://localhost:3000/api/student-profile?email=${encodeURIComponent(email)}`)
         .then((res2) => res2.json())
         .then((profile) => {
+          if (result && result.student && result.student.id) {
+            localStorage.setItem('studentId', String(result.student.id));
+          }
           if (profile && profile.name) {
             localStorage.setItem(`studentName_${email}`, profile.name);
+          }
+          if (profile && profile.id) {
+            localStorage.setItem('studentId', String(profile.id));
           }
           localStorage.setItem('studentEmail', email);
           window.location.href = 'student_home.html';
         })
         .catch(() => {
+          if (result && result.student && result.student.id) {
+            localStorage.setItem('studentId', String(result.student.id));
+          }
           localStorage.setItem('studentEmail', email);
           window.location.href = 'student_home.html';
         });

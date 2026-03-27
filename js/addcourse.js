@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const coverEditHint = document.getElementById('coverEditHint');
   const submitBtn = document.getElementById('courseSubmitBtn');
   const manageCourseTitle = document.getElementById('manageCourseTitle');
+  const durationInputs = Array.from(document.querySelectorAll('input[name="duration_days"]'));
   let editingCourseId = null;
   let pendingCourseId = null;
 
@@ -51,14 +52,16 @@ document.addEventListener('DOMContentLoaded', () => {
       submitBtn.textContent = 'Update Course';
     }
     const title = document.getElementById('title');
-    const duration = document.getElementById('duration');
     const category = document.getElementById('category');
-    const difficulty = document.getElementById('difficulty');
     const description = document.getElementById('description');
     if (title) title.value = course.title || '';
-    if (duration) duration.value = course.duration || '';
+    if (durationInputs.length > 0) {
+      const matchedDuration = durationInputs.find((input) => Number(input.value) === Number(course.duration_days || 90));
+      if (matchedDuration) {
+        matchedDuration.checked = true;
+      }
+    }
     if (category) category.value = course.category || '';
-    if (difficulty) difficulty.value = course.difficulty || '';
     if (description) description.value = course.description || '';
   }
 
@@ -72,6 +75,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (submitBtn) {
       submitBtn.textContent = 'Create Course';
+    }
+    if (durationInputs.length > 0) {
+      const defaultDuration = durationInputs.find((input) => Number(input.value) === 90) || durationInputs[0];
+      if (defaultDuration) {
+        defaultDuration.checked = true;
+      }
     }
   }
 
@@ -129,25 +138,34 @@ document.addEventListener('DOMContentLoaded', () => {
       const actionLabel = isEditing ? 'update' : 'creation';
 
       try {
-        const title = document.getElementById('title').value.trim();
-        const duration = document.getElementById('duration').value.trim();
+        const title = document.getElementById('title')?.value.trim() || '';
+        const durationInputs = Array.from(document.querySelectorAll('input[name="duration_days"]'));
+        const selectedDuration = durationInputs.find((input) => input.checked);
         const cover = document.getElementById('cover').files[0];
-        const category = document.getElementById('category').value.trim();
-        const difficulty = document.getElementById('difficulty').value.trim();
-        const description = document.getElementById('description').value.trim();
+        const category = document.getElementById('category')?.value.trim() || '';
+        const description = document.getElementById('description')?.value.trim() || '';
 
-        if (!title || !duration || !category || !difficulty || !description) {
-          alert('Please fill in all required fields.');
+        console.log('Form validation:', { title, selectedDuration, cover, category, description, durationInputs: durationInputs.length });
+
+        if (!title) {
+          alert('Please enter a course title.');
+          return;
+        }
+        if (!selectedDuration) {
+          alert('Please select a course duration.');
+          return;
+        }
+        if (!category) {
+          alert('Please enter a category.');
+          return;
+        }
+        if (!description) {
+          alert('Please enter a course description.');
           return;
         }
 
         if (!isEditing && !cover) {
           alert('Please select a cover image.');
-          return;
-        }
-
-        if (Number.isNaN(Number(duration))) {
-          alert('Duration must be a number (in hours).');
           return;
         }
 
@@ -160,13 +178,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData(createForm);
         formData.set('instructor_id', instructorId);
         formData.set('description', description);
+        formData.set('duration_days', selectedDuration.value);
 
         const response = isEditing
           ? await fetch(`http://localhost:3000/api/courses/${editingCourseId}`, {
               method: 'PUT',
               body: formData
             })
-          : await fetch(createForm.action, {
+          : await fetch('http://localhost:3000/courses', {
               method: 'POST',
               body: formData
             });
@@ -185,9 +204,11 @@ document.addEventListener('DOMContentLoaded', () => {
           alert('Course updated successfully!');
           clearEditMode();
         } else {
+          pendingCourseId = data.courseId ? String(data.courseId) : pendingCourseId;
           alert('Course created successfully! Now upload lesson videos.');
         }
         createForm.reset();
+        clearEditMode();
         loadInstructorCourses();
         window.dispatchEvent(new CustomEvent('instructor:courseChanged'));
       } catch (error) {
@@ -229,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
           formData.set('title', lessonTitle);
         }
 
-        const response = await fetch('http://localhost:3000/api/course-videos', {
+        const response = await fetch('http://localhost:3000/videos/upload', {
           method: 'POST',
           body: formData
         });

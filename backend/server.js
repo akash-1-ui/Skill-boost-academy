@@ -7,6 +7,26 @@ const bcrypt = require('bcrypt');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const {
+    COURSE_DURATION_OPTIONS,
+    DEFAULT_COURSE_DURATION_DAYS,
+    getDurationOption,
+    calculateExpiryDate,
+    getCourseLifecycleStatus,
+    getDaysRemaining
+} = require('./courseLifecycle');
+const {
+    getCloudinaryStatus,
+    uploadVideoAsset,
+    deleteVideoAssetByUrl
+} = require('./cloudinary');
+
+let cron = null;
+try {
+    cron = require('node-cron');
+} catch (error) {
+    console.warn('node-cron is not installed. Scheduled cleanup jobs are disabled until dependencies are installed.');
+}
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -25,6 +45,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 try {
     fs.mkdirSync(path.join(__dirname, 'videos'), { recursive: true });
+    fs.mkdirSync(path.join(__dirname, 'tmp', 'videos'), { recursive: true });
     fs.mkdirSync(path.join(__dirname, 'uploads', 'covers'), { recursive: true });
     console.log('Upload directories created/verified');
 } catch (err) {
@@ -34,7 +55,7 @@ try {
 const storage = multer.diskStorage({
     destination(req, file, cb) {
         const destination = file.fieldname === 'video'
-            ? path.join(__dirname, 'videos')
+            ? path.join(__dirname, 'tmp', 'videos')
             : path.join(__dirname, 'uploads', 'covers');
         cb(null, destination);
     },
@@ -83,6 +104,11 @@ app.use('/videos', express.static(path.join(__dirname, 'videos')));
 app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
     next();
+});
+
+// Root route - serve index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'HTML', 'index.html'));
 });
 
 function asPositiveInt(value) {
@@ -185,22 +211,94 @@ async function sendResetOtpSms(phone, otp) {
 }
 
 function normalizeCourse(course) {
+    const durationOption = getDurationOption(course.duration_days || course.duration);
+    const durationDays = Number(course.duration_days || durationOption.days || DEFAULT_COURSE_DURATION_DAYS);
+    const durationLabel = course.duration_label || durationOption.planLabel;
+    const expiryDate = course.expiry_date || calculateExpiryDate(course.created_at, durationDays);
+    const status = getCourseLifecycleStatus(expiryDate);
+
     return {
         id: course.id,
         instructor_id: course.instructor_id,
         title: course.title,
-        duration: course.duration,
+        duration: `${durationDays} days`,
+        duration_days: durationDays,
+        duration_label: durationLabel,
+        duration_summary: `${durationDays} days (${durationLabel})`,
         category: course.category,
-        difficulty: course.difficulty,
         description: course.description || '',
         enrolled_students: Number(course.enrolled_students || 0),
         created_at: course.created_at,
+        expiry_date: expiryDate,
+        status,
+        days_remaining: getDaysRemaining(expiryDate),
         cover_path: course.cover_path || null,
         video_path: course.video_path || null,
         // Keep aliases for existing frontend code.
         cover: course.cover_path || null,
         video: course.video_path || null
     };
+}
+
+async function createNotifications(userIds, message, type) {
+    const uniqueUserIds = Array.from(new Set((userIds || []).map(asPositiveInt).filter(Boolean)));
+    if (uniqueUserIds.length === 0 || !message || !type) {
+        return 0;
+    }
+
+    const placeholders = uniqueUserIds.map(() => '(?, ?, ?, ?, NOW())').join(', ');
+    const values = uniqueUserIds.flatMap((userId) => [userId, message, type, 0]);
+    await db.query(
+        `INSERT INTO notifications (user_id, message, type, is_read, created_at)
+         VALUES ${placeholders}`,
+        values
+    );
+    return uniqueUserIds.length;
+}
+
+async function getStudentUserIdsForCourse(courseId) {
+    const [rows] = await db.query(
+        `SELECT DISTINCT u.id
+         FROM enrollments e
+         INNER JOIN users u ON u.email = e.student_email
+         WHERE e.course_id = ? AND u.role = 'student'`,
+        [courseId]
+    );
+
+    return rows.map((row) => Number(row.id)).filter(Boolean);
+}
+
+async function sendNewCourseNotifications(courseTitle) {
+    const [rows] = await db.query(
+        `SELECT id
+         FROM users
+         WHERE role = 'student'`
+    );
+
+    return createNotifications(
+        rows.map((row) => Number(row.id)),
+        `New course added: ${courseTitle}`,
+        'new_course'
+    );
+}
+
+async function sendExpiryWarningNotifications(course) {
+    if (!course || !course.id) {
+        return 0;
+    }
+
+    const studentUserIds = await getStudentUserIdsForCourse(course.id);
+    const recipients = [Number(course.instructor_id), ...studentUserIds];
+    const message = `Course '${course.title}' will expire tomorrow`;
+    return createNotifications(recipients, message, 'expiry_warning');
+}
+
+async function sendExpiryDeletionNotification(instructorId, courseTitle) {
+    return createNotifications(
+        [Number(instructorId)],
+        `Your course '${courseTitle}' has been removed after expiry`,
+        'deleted'
+    );
 }
 
 async function ensureColumnExists(tableName, columnName, definitionSql) {
@@ -223,6 +321,15 @@ async function ensureColumnNullable(tableName, columnName, columnTypeSql) {
     }
 }
 
+async function dropColumnIfExists(tableName, columnName) {
+    const [columns] = await db.query(`SHOW COLUMNS FROM ${tableName} LIKE ?`, [columnName]);
+    if (columns.length === 0) {
+        return;
+    }
+    await db.query(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`);
+    console.log(`Dropped ${columnName} column from ${tableName}`);
+}
+
 async function initializeTables() {
     await db.query(`
         CREATE TABLE IF NOT EXISTS courses (
@@ -230,25 +337,65 @@ async function initializeTables() {
             instructor_id INT NOT NULL,
             title VARCHAR(255) NOT NULL,
             duration VARCHAR(50),
+            duration_days INT DEFAULT 90,
+            duration_label VARCHAR(100) DEFAULT 'Full course',
             cover_path TEXT NOT NULL,
             video_path TEXT NULL,
             category VARCHAR(100) NOT NULL,
-            difficulty VARCHAR(50) NOT NULL,
             description TEXT,
             enrolled_students INT DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expiry_date TIMESTAMP NULL DEFAULT NULL,
+            expiry_warning_sent_at DATETIME NULL,
             FOREIGN KEY (instructor_id) REFERENCES users(id)
         )
     `);
 
     await ensureColumnExists('courses', 'duration', 'duration VARCHAR(50) AFTER title');
+    await ensureColumnExists('courses', 'duration_days', 'duration_days INT DEFAULT 90 AFTER duration');
+    await ensureColumnExists('courses', 'duration_label', `duration_label VARCHAR(100) DEFAULT 'Full course' AFTER duration_days`);
     await ensureColumnExists('courses', 'cover_path', 'cover_path TEXT NOT NULL');
     await ensureColumnExists('courses', 'video_path', 'video_path TEXT NULL');
     await ensureColumnNullable('courses', 'video_path', 'TEXT');
     await ensureColumnExists('courses', 'category', 'category VARCHAR(100) NOT NULL');
-    await ensureColumnExists('courses', 'difficulty', 'difficulty VARCHAR(50) NOT NULL');
     await ensureColumnExists('courses', 'description', 'description TEXT');
     await ensureColumnExists('courses', 'enrolled_students', 'enrolled_students INT DEFAULT 0');
+    await ensureColumnExists('courses', 'expiry_date', 'expiry_date TIMESTAMP NULL DEFAULT NULL AFTER created_at');
+    await ensureColumnExists('courses', 'expiry_warning_sent_at', 'expiry_warning_sent_at DATETIME NULL AFTER expiry_date');
+    await dropColumnIfExists('courses', 'difficulty');
+
+    await db.query(`
+        UPDATE courses
+        SET duration_days = CASE
+            WHEN duration_days IN (30, 60, 90, 180) THEN duration_days
+            ELSE ${DEFAULT_COURSE_DURATION_DAYS}
+        END
+    `);
+
+    await db.query(`
+        UPDATE courses
+        SET duration_label = CASE duration_days
+            WHEN 30 THEN 'Short course'
+            WHEN 60 THEN 'Medium course'
+            WHEN 180 THEN 'Advanced course'
+            ELSE 'Full course'
+        END
+        WHERE duration_label IS NULL OR duration_label = ''
+    `);
+
+    await db.query(`
+        UPDATE courses
+        SET duration = CONCAT(duration_days, ' days')
+        WHERE duration IS NULL
+           OR duration = ''
+           OR duration REGEXP '^[0-9]+(\\.[0-9]+)?$'
+    `);
+
+    await db.query(`
+        UPDATE courses
+        SET expiry_date = DATE_ADD(created_at, INTERVAL duration_days DAY)
+        WHERE expiry_date IS NULL
+    `);
 
     await db.query(`
         CREATE TABLE IF NOT EXISTS enrollments (
@@ -269,6 +416,17 @@ async function initializeTables() {
             last_viewed TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY unique_view (student_email, course_id)
+        )
+    `);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS videos (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            course_id INT NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            video_url TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (course_id) REFERENCES courses(id)
         )
     `);
 
@@ -305,6 +463,47 @@ async function initializeTables() {
     `);
 
     await db.query(`
+        INSERT INTO videos (id, course_id, title, video_url, created_at)
+        SELECT cv.id, cv.course_id, cv.title, cv.video_path, cv.created_at
+        FROM course_videos cv
+        LEFT JOIN videos v ON v.id = cv.id
+        WHERE v.id IS NULL
+    `);
+
+    await db.query(`
+        INSERT INTO course_videos (id, course_id, title, video_path, created_at)
+        SELECT v.id, v.course_id, v.title, v.video_url, v.created_at
+        FROM videos v
+        LEFT JOIN course_videos cv ON cv.id = v.id
+        WHERE cv.id IS NULL
+    `);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT NOT NULL,
+            message TEXT NOT NULL,
+            type VARCHAR(50) NOT NULL,
+            is_read TINYINT(1) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    `);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS messages (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            instructor_id INT NOT NULL,
+            title VARCHAR(255) NOT NULL DEFAULT 'Message',
+            content TEXT NOT NULL,
+            priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+            sent_count INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (instructor_id) REFERENCES users(id)
+        )
+    `);
+
+    await db.query(`
         CREATE TABLE IF NOT EXISTS contacts (
             id INT PRIMARY KEY AUTO_INCREMENT,
             name VARCHAR(255) NOT NULL,
@@ -331,9 +530,19 @@ async function initializeTables() {
     console.log('Application tables verified/created');
 }
 
-initializeTables().catch((err) => {
-    console.error('Error initializing application tables:', err);
-});
+initializeTables()
+    .then(async () => {
+        scheduleCourseLifecycleJobs();
+        try {
+            const result = await runCourseLifecycleSweep();
+            console.log(`Initial course lifecycle sweep complete. warnings=${result.warningCount}, deleted=${result.deletedCount}`);
+        } catch (error) {
+            console.error('Initial course lifecycle sweep failed:', error);
+        }
+    })
+    .catch((err) => {
+        console.error('Error initializing application tables:', err);
+    });
 
 async function deleteStoredFile(publicPath) {
     if (!publicPath || typeof publicPath !== 'string') {
@@ -357,9 +566,157 @@ async function deleteStoredFile(publicPath) {
     }
 }
 
+async function deleteVideoStorageAsset(videoUrl) {
+    if (!videoUrl || typeof videoUrl !== 'string') {
+        return;
+    }
+
+    if (/^https?:\/\//i.test(videoUrl)) {
+        await deleteVideoAssetByUrl(videoUrl);
+        return;
+    }
+
+    await deleteStoredFile(videoUrl);
+}
+
+async function fetchCourseVideoRows(courseId, studentEmail = '') {
+    const normalizedCourseId = asPositiveInt(courseId);
+    if (!normalizedCourseId) {
+        return [];
+    }
+
+    const [videoRows] = studentEmail
+        ? await db.query(
+            `SELECT
+                v.id,
+                v.course_id,
+                v.title,
+                v.video_url,
+                v.created_at,
+                COALESCE(p.is_watched, 0) AS is_watched
+             FROM videos v
+             LEFT JOIN course_video_progress p
+               ON p.video_id = v.id AND p.student_email = ?
+             WHERE v.course_id = ?
+             ORDER BY v.created_at ASC, v.id ASC`,
+            [studentEmail, normalizedCourseId]
+        )
+        : await db.query(
+            `SELECT
+                v.id,
+                v.course_id,
+                v.title,
+                v.video_url,
+                v.created_at,
+                0 AS is_watched
+             FROM videos v
+             WHERE v.course_id = ?
+             ORDER BY v.created_at ASC, v.id ASC`,
+            [normalizedCourseId]
+        );
+
+    return videoRows.map((video) => ({
+        id: video.id,
+        course_id: video.course_id,
+        title: video.title,
+        video_url: video.video_url,
+        video_path: video.video_url,
+        video: video.video_url,
+        created_at: video.created_at,
+        is_watched: Number(video.is_watched || 0)
+    }));
+}
+
+async function insertVideoRecord(courseId, title, videoUrl, createdAt = new Date()) {
+    const [result] = await db.query(
+        `INSERT INTO videos (course_id, title, video_url, created_at)
+         VALUES (?, ?, ?, ?)`,
+        [courseId, title, videoUrl, createdAt]
+    );
+
+    await db.query(
+        `INSERT INTO course_videos (id, course_id, title, video_path, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        [result.insertId, courseId, title, videoUrl, createdAt]
+    );
+
+    return result.insertId;
+}
+
+async function updateVideoRecord(videoId, title, videoUrl) {
+    await db.query(
+        'UPDATE videos SET title = ?, video_url = ? WHERE id = ?',
+        [title, videoUrl, videoId]
+    );
+
+    await db.query(
+        'UPDATE course_videos SET title = ?, video_path = ? WHERE id = ?',
+        [title, videoUrl, videoId]
+    );
+}
+
+async function deleteVideoRecord(videoId) {
+    await db.query('DELETE FROM course_video_progress WHERE video_id = ?', [videoId]);
+    await db.query('DELETE FROM course_videos WHERE id = ?', [videoId]);
+    await db.query('DELETE FROM videos WHERE id = ?', [videoId]);
+}
+
+async function deleteCourseWithAssets(courseId, options = {}) {
+    const normalizedCourseId = asPositiveInt(courseId);
+    if (!normalizedCourseId) {
+        return null;
+    }
+
+    const [courseRows] = await db.query(
+        `SELECT id, title, instructor_id, cover_path, video_path
+         FROM courses
+         WHERE id = ?`,
+        [normalizedCourseId]
+    );
+
+    if (courseRows.length === 0) {
+        return null;
+    }
+
+    const course = courseRows[0];
+    const [videoRows] = await db.query(
+        `SELECT id, video_url
+         FROM videos
+         WHERE course_id = ?`,
+        [normalizedCourseId]
+    );
+
+    const videoIds = videoRows.map((video) => Number(video.id)).filter(Boolean);
+
+    await db.query('DELETE FROM enrollments WHERE course_id = ?', [normalizedCourseId]);
+    await db.query('DELETE FROM course_views WHERE course_id = ?', [normalizedCourseId]);
+    if (videoIds.length > 0) {
+        await db.query('DELETE FROM course_video_progress WHERE video_id IN (?)', [videoIds]);
+    }
+    await db.query('DELETE FROM course_videos WHERE course_id = ?', [normalizedCourseId]);
+    await db.query('DELETE FROM videos WHERE course_id = ?', [normalizedCourseId]);
+    await db.query('DELETE FROM courses WHERE id = ?', [normalizedCourseId]);
+
+    await deleteStoredFile(course.cover_path);
+
+    if (course.video_path) {
+        await deleteVideoStorageAsset(course.video_path);
+    }
+
+    for (const video of videoRows) {
+        await deleteVideoStorageAsset(video.video_url);
+    }
+
+    if (options.sendExpiryNotification) {
+        await sendExpiryDeletionNotification(course.instructor_id, course.title);
+    }
+
+    return course;
+}
+
 async function deleteInstructorCourses(instructorId) {
     const [courses] = await db.query(
-        'SELECT id, cover_path, video_path FROM courses WHERE instructor_id = ?',
+        'SELECT id FROM courses WHERE instructor_id = ?',
         [instructorId]
     );
 
@@ -367,37 +724,82 @@ async function deleteInstructorCourses(instructorId) {
         return 0;
     }
 
-    const courseIds = courses.map((course) => course.id);
-
-    await db.query('DELETE FROM enrollments WHERE course_id IN (?)', [courseIds]);
-    await db.query('DELETE FROM course_views WHERE course_id IN (?)', [courseIds]);
-    const [videoRows] = await db.query(
-        'SELECT id, video_path FROM course_videos WHERE course_id IN (?)',
-        [courseIds]
-    );
-    const videoIds = videoRows.map((video) => video.id);
-    if (videoIds.length > 0) {
-        await db.query('DELETE FROM course_video_progress WHERE video_id IN (?)', [videoIds]);
+    for (const course of courses) {
+        await deleteCourseWithAssets(course.id, { sendExpiryNotification: false });
     }
-    await db.query('DELETE FROM course_videos WHERE course_id IN (?)', [courseIds]);
-    await db.query('DELETE FROM courses WHERE id IN (?)', [courseIds]);
+
+    return courses.length;
+}
+
+async function sendUpcomingExpiryWarnings() {
+    const [courses] = await db.query(
+        `SELECT id, title, instructor_id, expiry_date, expiry_warning_sent_at
+         FROM courses
+         WHERE expiry_date IS NOT NULL
+           AND expiry_date > NOW()
+           AND DATE(expiry_date) = DATE(DATE_ADD(NOW(), INTERVAL 1 DAY))
+           AND (expiry_warning_sent_at IS NULL OR DATE(expiry_warning_sent_at) < CURDATE())`
+    );
 
     for (const course of courses) {
-        await deleteStoredFile(course.cover_path);
-        await deleteStoredFile(course.video_path);
-    }
-    for (const video of videoRows) {
-        await deleteStoredFile(video.video_path);
+        await sendExpiryWarningNotifications(course);
+        await db.query(
+            'UPDATE courses SET expiry_warning_sent_at = NOW() WHERE id = ?',
+            [course.id]
+        );
     }
 
-    return courseIds.length;
+    return courses.length;
+}
+
+async function cleanupExpiredCourses() {
+    const [courses] = await db.query(
+        `SELECT id
+         FROM courses
+         WHERE expiry_date IS NOT NULL
+           AND expiry_date <= NOW()`
+    );
+
+    for (const course of courses) {
+        await deleteCourseWithAssets(course.id, { sendExpiryNotification: true });
+    }
+
+    return courses.length;
+}
+
+async function runCourseLifecycleSweep() {
+    const warningCount = await sendUpcomingExpiryWarnings();
+    const deletedCount = await cleanupExpiredCourses();
+    return { warningCount, deletedCount };
+}
+
+function scheduleCourseLifecycleJobs() {
+    if (!cron) {
+        return;
+    }
+
+    const scheduleExpression = process.env.COURSE_LIFECYCLE_CRON || '0 0 * * *';
+    const timezone = process.env.COURSE_LIFECYCLE_TZ || process.env.TZ || 'Asia/Calcutta';
+
+    cron.schedule(scheduleExpression, async () => {
+        try {
+            const result = await runCourseLifecycleSweep();
+            console.log(`Course lifecycle sweep complete. warnings=${result.warningCount}, deleted=${result.deletedCount}`);
+        } catch (error) {
+            console.error('Course lifecycle sweep failed:', error);
+        }
+    }, {
+        timezone
+    });
+
+    console.log(`Course lifecycle cron scheduled with "${scheduleExpression}" in timezone "${timezone}"`);
 }
 
 app.get('/api/test', (req, res) => {
     res.json({ message: 'Server is working!' });
 });
 
-app.get('/api/courses', async (req, res) => {
+app.get(['/courses', '/api/courses'], async (req, res) => {
     try {
         const studentEmail = (req.query.studentEmail || '').toString().trim();
 
@@ -405,12 +807,13 @@ app.get('/api/courses', async (req, res) => {
             const [courses] = await db.query(
                 `SELECT
                     c.*,
-                    COUNT(DISTINCT cv.id) AS video_count,
+                    COUNT(DISTINCT v.id) AS video_count,
                     COUNT(DISTINCT CASE WHEN p.is_watched = 1 THEN p.video_id END) AS watched_count
                  FROM courses c
-                 LEFT JOIN course_videos cv ON cv.course_id = c.id
+                 LEFT JOIN videos v ON v.course_id = c.id
                  LEFT JOIN course_video_progress p
-                   ON p.video_id = cv.id AND p.student_email = ?
+                   ON p.video_id = v.id AND p.student_email = ?
+                 WHERE c.expiry_date IS NULL OR c.expiry_date > NOW()
                  GROUP BY c.id
                  ORDER BY c.created_at DESC`,
                 [studentEmail]
@@ -433,7 +836,12 @@ app.get('/api/courses', async (req, res) => {
             return res.json(payload);
         }
 
-        const [courses] = await db.query('SELECT * FROM courses ORDER BY created_at DESC');
+        const [courses] = await db.query(
+            `SELECT *
+             FROM courses
+             WHERE expiry_date IS NULL OR expiry_date > NOW()
+             ORDER BY created_at DESC`
+        );
         return res.json(courses.map(normalizeCourse));
     } catch (error) {
         console.error('Error fetching all courses:', error);
@@ -452,7 +860,11 @@ app.get('/api/course/:courseId', async (req, res) => {
         if (rows.length === 0) {
             return res.status(404).json({ error: 'Course not found' });
         }
-        return res.json(normalizeCourse(rows[0]));
+        const normalizedCourse = normalizeCourse(rows[0]);
+        if (normalizedCourse.status === 'Expired') {
+            return res.status(404).json({ error: 'Course not found' });
+        }
+        return res.json(normalizedCourse);
     } catch (error) {
         console.error('Error fetching course:', error);
         return res.status(500).json({ error: 'Internal server error' });
@@ -467,7 +879,11 @@ app.get('/api/courses/:instructorId', async (req, res) => {
 
     try {
         const [courses] = await db.query(
-            'SELECT * FROM courses WHERE instructor_id = ? ORDER BY created_at DESC',
+            `SELECT *
+             FROM courses
+             WHERE instructor_id = ?
+               AND (expiry_date IS NULL OR expiry_date > NOW())
+             ORDER BY created_at DESC`,
             [instructorId]
         );
         return res.json(courses.map(normalizeCourse));
@@ -477,7 +893,7 @@ app.get('/api/courses/:instructorId', async (req, res) => {
     }
 });
 
-app.get('/api/course-videos/:courseId', async (req, res) => {
+app.get(['/courses/:courseId/videos', '/api/course-videos/:courseId'], async (req, res) => {
     const courseId = asPositiveInt(req.params.courseId);
     if (!courseId) {
         return res.status(400).json({ error: 'Invalid course ID' });
@@ -486,7 +902,9 @@ app.get('/api/course-videos/:courseId', async (req, res) => {
     try {
         const studentEmail = (req.query.studentEmail || '').toString().trim();
         const [courseRows] = await db.query(
-            'SELECT id, title, video_path FROM courses WHERE id = ?',
+            `SELECT id, title, video_path, expiry_date
+             FROM courses
+             WHERE id = ?`,
             [courseId]
         );
 
@@ -495,38 +913,11 @@ app.get('/api/course-videos/:courseId', async (req, res) => {
         }
 
         const course = courseRows[0];
-        const [videos] = studentEmail
-            ? await db.query(
-                `SELECT
-                    cv.id,
-                    cv.title,
-                    cv.video_path,
-                    cv.created_at,
-                    COALESCE(p.is_watched, 0) AS is_watched
-                 FROM course_videos cv
-                 LEFT JOIN course_video_progress p
-                   ON p.video_id = cv.id AND p.student_email = ?
-                 WHERE cv.course_id = ?
-                 ORDER BY cv.created_at ASC`,
-                [studentEmail, courseId]
-            )
-            : await db.query(
-                `SELECT id, title, video_path, created_at
-                 FROM course_videos
-                 WHERE course_id = ?
-                 ORDER BY created_at ASC`,
-                [courseId]
-            );
+        if (getCourseLifecycleStatus(course.expiry_date) === 'Expired') {
+            return res.status(404).json({ error: 'Course not found' });
+        }
 
-        const items = videos.map((video) => ({
-            id: video.id,
-            course_id: courseId,
-            title: video.title,
-            video_path: video.video_path,
-            video: video.video_path,
-            created_at: video.created_at,
-            is_watched: Number(video.is_watched || 0)
-        }));
+        const items = await fetchCourseVideoRows(courseId, studentEmail);
 
         if (items.length === 0 && course.video_path) {
             items.push({
@@ -550,7 +941,7 @@ app.get('/api/course-videos/:courseId', async (req, res) => {
     }
 });
 
-app.post('/api/course-videos', upload.single('video'), async (req, res) => {
+app.post(['/videos/upload', '/api/videos/upload', '/api/course-videos'], upload.single('video'), async (req, res) => {
     try {
         const courseId = asPositiveInt(req.body.course_id);
         const instructorId = asPositiveInt(req.body.instructor_id);
@@ -565,7 +956,9 @@ app.post('/api/course-videos', upload.single('video'), async (req, res) => {
         }
 
         const [courseRows] = await db.query(
-            'SELECT id, instructor_id FROM courses WHERE id = ?',
+            `SELECT id, instructor_id, title, expiry_date
+             FROM courses
+             WHERE id = ?`,
             [courseId]
         );
 
@@ -578,26 +971,38 @@ app.post('/api/course-videos', upload.single('video'), async (req, res) => {
             return res.status(403).json({ error: 'You can only upload videos to your own courses' });
         }
 
-        const videoPath = `/videos/${path.basename(req.file.path)}`;
-        const [result] = await db.query(
-            `INSERT INTO course_videos (course_id, title, video_path, created_at)
-             VALUES (?, ?, ?, NOW())`,
-            [courseId, title, videoPath]
-        );
+        if (getCourseLifecycleStatus(course.expiry_date) === 'Expired') {
+            return res.status(400).json({ error: 'This course has expired and can no longer accept uploads' });
+        }
+
+        const uploadedVideo = await uploadVideoAsset(req.file.path);
+        const videoUrl = uploadedVideo.secure_url || uploadedVideo.url;
+        const createdAt = new Date();
+        let videoId = null;
+
+        try {
+            videoId = await insertVideoRecord(courseId, title, videoUrl, createdAt);
+        } catch (dbError) {
+            await deleteVideoAssetByUrl(videoUrl);
+            throw dbError;
+        }
 
         return res.status(201).json({
             message: 'Video uploaded successfully',
             video: {
-                id: result.insertId,
+                id: videoId,
                 course_id: courseId,
                 title,
-                video_path: videoPath,
-                video: videoPath
+                video_url: videoUrl,
+                video_path: videoUrl,
+                video: videoUrl,
+                created_at: createdAt
             }
         });
     } catch (error) {
         console.error('Course video upload error:', error);
-        return res.status(500).json({ error: 'Failed to upload video' });
+        const status = String(error.message || '').includes('Cloudinary upload is unavailable') ? 503 : 500;
+        return res.status(status).json({ error: error.message || 'Failed to upload video' });
     }
 });
 
@@ -615,10 +1020,10 @@ app.put('/api/course-videos/:videoId', optionalVideoUpload, async (req, res) => 
         }
 
         const [rows] = await db.query(
-            `SELECT cv.id, cv.title, cv.video_path, c.instructor_id
-             FROM course_videos cv
-             INNER JOIN courses c ON c.id = cv.course_id
-             WHERE cv.id = ?`,
+            `SELECT v.id, v.title, v.video_url, c.instructor_id
+             FROM videos v
+             INNER JOIN courses c ON c.id = v.course_id
+             WHERE v.id = ?`,
             [videoId]
         );
 
@@ -634,15 +1039,26 @@ app.put('/api/course-videos/:videoId', optionalVideoUpload, async (req, res) => 
         const incomingTitle = (req.body.title || '').toString().trim();
         const updatedTitle = incomingTitle || existing.title || 'Lesson Video';
         const hasNewVideo = Boolean(req.file);
-        const updatedPath = hasNewVideo ? `/videos/${path.basename(req.file.path)}` : existing.video_path;
+        let updatedPath = existing.video_url;
+        let uploadedVideoUrl = null;
 
-        await db.query(
-            'UPDATE course_videos SET title = ?, video_path = ? WHERE id = ?',
-            [updatedTitle, updatedPath, videoId]
-        );
+        if (hasNewVideo) {
+            const uploadedVideo = await uploadVideoAsset(req.file.path);
+            uploadedVideoUrl = uploadedVideo.secure_url || uploadedVideo.url;
+            updatedPath = uploadedVideoUrl;
+        }
 
-        if (hasNewVideo && existing.video_path && existing.video_path !== updatedPath) {
-            await deleteStoredFile(existing.video_path);
+        try {
+            await updateVideoRecord(videoId, updatedTitle, updatedPath);
+        } catch (dbError) {
+            if (uploadedVideoUrl) {
+                await deleteVideoAssetByUrl(uploadedVideoUrl);
+            }
+            throw dbError;
+        }
+
+        if (hasNewVideo && existing.video_url && existing.video_url !== updatedPath) {
+            await deleteVideoStorageAsset(existing.video_url);
         }
 
         return res.json({
@@ -650,13 +1066,15 @@ app.put('/api/course-videos/:videoId', optionalVideoUpload, async (req, res) => 
             video: {
                 id: videoId,
                 title: updatedTitle,
+                video_url: updatedPath,
                 video_path: updatedPath,
                 video: updatedPath
             }
         });
     } catch (error) {
         console.error('Course video update error:', error);
-        return res.status(500).json({ error: 'Failed to update video' });
+        const status = String(error.message || '').includes('Cloudinary upload is unavailable') ? 503 : 500;
+        return res.status(status).json({ error: error.message || 'Failed to update video' });
     }
 });
 
@@ -674,10 +1092,10 @@ app.delete('/api/course-videos/:videoId', async (req, res) => {
         }
 
         const [rows] = await db.query(
-            `SELECT cv.id, cv.video_path, c.instructor_id
-             FROM course_videos cv
-             INNER JOIN courses c ON c.id = cv.course_id
-             WHERE cv.id = ?`,
+            `SELECT v.id, v.video_url, c.instructor_id
+             FROM videos v
+             INNER JOIN courses c ON c.id = v.course_id
+             WHERE v.id = ?`,
             [videoId]
         );
 
@@ -690,10 +1108,8 @@ app.delete('/api/course-videos/:videoId', async (req, res) => {
             return res.status(403).json({ error: 'You can only delete your own course videos' });
         }
 
-        await db.query('DELETE FROM course_video_progress WHERE video_id = ?', [videoId]);
-        await db.query('DELETE FROM course_videos WHERE id = ?', [videoId]);
-
-        await deleteStoredFile(existing.video_path);
+        await deleteVideoRecord(videoId);
+        await deleteVideoStorageAsset(existing.video_url);
 
         return res.json({ message: 'Video deleted successfully' });
     } catch (error) {
@@ -728,15 +1144,18 @@ app.post('/api/course-video-progress', async (req, res) => {
     }
 });
 
-app.delete('/api/courses/:courseId', async (req, res) => {
+app.delete(['/courses/:courseId', '/api/courses/:courseId'], async (req, res) => {
     const courseId = asPositiveInt(req.params.courseId);
     if (!courseId) {
         return res.status(400).json({ error: 'Invalid course ID' });
     }
 
     try {
+        const instructorId = asPositiveInt(req.query.instructorId || req.body?.instructor_id);
         const [existingRows] = await db.query(
-            'SELECT id, cover_path, video_path FROM courses WHERE id = ?',
+            `SELECT id, instructor_id
+             FROM courses
+             WHERE id = ?`,
             [courseId]
         );
 
@@ -745,25 +1164,11 @@ app.delete('/api/courses/:courseId', async (req, res) => {
         }
 
         const existingCourse = existingRows[0];
-
-        await db.query('DELETE FROM enrollments WHERE course_id = ?', [courseId]);
-        await db.query('DELETE FROM course_views WHERE course_id = ?', [courseId]);
-        const [videoRows] = await db.query(
-            'SELECT id, video_path FROM course_videos WHERE course_id = ?',
-            [courseId]
-        );
-        const videoIds = videoRows.map((video) => video.id);
-        if (videoIds.length > 0) {
-            await db.query('DELETE FROM course_video_progress WHERE video_id IN (?)', [videoIds]);
+        if (instructorId && Number(existingCourse.instructor_id) !== Number(instructorId)) {
+            return res.status(403).json({ error: 'You can only delete your own courses' });
         }
-        await db.query('DELETE FROM course_videos WHERE course_id = ?', [courseId]);
-        await db.query('DELETE FROM courses WHERE id = ?', [courseId]);
 
-        await deleteStoredFile(existingCourse.cover_path);
-        await deleteStoredFile(existingCourse.video_path);
-        for (const video of videoRows) {
-            await deleteStoredFile(video.video_path);
-        }
+        await deleteCourseWithAssets(courseId, { sendExpiryNotification: false });
 
         return res.json({ message: 'Course deleted successfully' });
     } catch (error) {
@@ -777,19 +1182,22 @@ app.put('/api/courses/:courseId', upload.fields([
 ]), async (req, res) => {
     try {
         const courseId = asPositiveInt(req.params.courseId);
-        const { title, duration, category, difficulty, description, instructor_id } = req.body;
+        const { title, category, description, instructor_id } = req.body;
         const instructorId = asPositiveInt(instructor_id);
+        const durationOption = getDurationOption(req.body.duration_days || req.body.duration);
 
         if (!courseId) {
             return res.status(400).json({ error: 'Invalid course ID' });
         }
 
-        if (!title || !duration || !category || !difficulty || !description || !instructorId) {
+        if (!title || !category || !description || !instructorId) {
             return res.status(400).json({ error: 'All fields are required' });
         }
 
         const [rows] = await db.query(
-            'SELECT id, instructor_id, cover_path FROM courses WHERE id = ?',
+            `SELECT id, instructor_id, cover_path, created_at
+             FROM courses
+             WHERE id = ?`,
             [courseId]
         );
 
@@ -807,25 +1215,49 @@ app.put('/api/courses/:courseId', upload.fields([
             coverPath = `/uploads/covers/${path.basename(req.files.cover[0].path)}`;
         }
 
+        const expiryDate = calculateExpiryDate(existingCourse.created_at, durationOption.days);
+
         await db.query(
             `UPDATE courses
-             SET title = ?, duration = ?, category = ?, difficulty = ?, description = ?, cover_path = ?
+             SET title = ?,
+                 duration = ?,
+                 duration_days = ?,
+                 duration_label = ?,
+                 expiry_date = ?,
+                 category = ?,
+                 description = ?,
+                 cover_path = ?
              WHERE id = ?`,
-            [title, duration, category, difficulty, description, coverPath, courseId]
+            [
+                title,
+                durationOption.optionLabel,
+                durationOption.days,
+                durationOption.planLabel,
+                expiryDate,
+                category,
+                description,
+                coverPath,
+                courseId
+            ]
         );
 
         if (coverPath !== existingCourse.cover_path) {
             await deleteStoredFile(existingCourse.cover_path);
         }
 
-        return res.json({ message: 'Course updated successfully', courseId });
+        return res.json({
+            message: 'Course updated successfully',
+            courseId,
+            expiry_date: expiryDate,
+            duration_days: durationOption.days
+        });
     } catch (error) {
         console.error('Error updating course:', error);
         return res.status(500).json({ error: 'Failed to update course' });
     }
 });
 
-app.post('/submit-course', upload.fields([
+app.post(['/courses', '/api/courses', '/submit-course'], upload.fields([
     { name: 'video', maxCount: 1 },
     { name: 'cover', maxCount: 1 }
 ]), async (req, res) => {
@@ -834,49 +1266,88 @@ app.post('/submit-course', upload.fields([
             return res.status(400).json({ error: 'Cover file is required' });
         }
 
-        const { title, duration, category, difficulty, description, instructor_id } = req.body;
+        const { title, category, description, instructor_id } = req.body;
         const instructorId = asPositiveInt(instructor_id);
+        const durationOption = getDurationOption(req.body.duration_days || req.body.duration);
 
-        if (!title || !duration || !category || !difficulty || !description || !instructorId) {
+        if (!title || !category || !description || !instructorId) {
             return res.status(400).json({ error: 'All fields are required' });
         }
 
         const hasVideo = req.files.video && req.files.video[0];
-        const videoPath = hasVideo ? `/videos/${path.basename(req.files.video[0].path)}` : null;
         const coverPath = `/uploads/covers/${path.basename(req.files.cover[0].path)}`;
+        const createdAt = new Date();
+        const expiryDate = calculateExpiryDate(createdAt, durationOption.days);
+        let videoPath = null;
 
-        const [result] = await db.query(
-            `INSERT INTO courses (
-                instructor_id,
-                title,
-                duration,
-                cover_path,
-                video_path,
-                category,
-                difficulty,
-                description,
-                enrolled_students,
-                created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NOW())`,
-              [instructorId, title, duration, coverPath, videoPath, category, difficulty, description]
-        );
+        if (hasVideo) {
+            const uploadedVideo = await uploadVideoAsset(req.files.video[0].path);
+            videoPath = uploadedVideo.secure_url || uploadedVideo.url;
+        }
 
-        if (videoPath) {
-            await db.query(
-                `INSERT INTO course_videos (course_id, title, video_path, created_at)
-                 VALUES (?, ?, ?, NOW())`,
-                [result.insertId, `${title} - Main Video`, videoPath]
+        let courseId = null;
+
+        try {
+            const [result] = await db.query(
+                `INSERT INTO courses (
+                    instructor_id,
+                    title,
+                    duration,
+                    duration_days,
+                    duration_label,
+                    cover_path,
+                    video_path,
+                    category,
+                    description,
+                    enrolled_students,
+                    created_at,
+                    expiry_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+                [
+                    instructorId,
+                    title,
+                    durationOption.optionLabel,
+                    durationOption.days,
+                    durationOption.planLabel,
+                    coverPath,
+                    videoPath,
+                    category,
+                    description,
+                    createdAt,
+                    expiryDate
+                ]
             );
+
+            courseId = result.insertId;
+
+            if (videoPath) {
+                await insertVideoRecord(courseId, `${title} - Main Video`, videoPath, createdAt);
+            }
+        } catch (dbError) {
+            await deleteStoredFile(coverPath);
+            if (videoPath) {
+                await deleteVideoAssetByUrl(videoPath);
+            }
+            throw dbError;
+        }
+
+        try {
+            await sendNewCourseNotifications(title);
+        } catch (notificationError) {
+            console.error('New course notification error:', notificationError);
         }
 
         return res.status(201).json({
             message: 'Course created successfully',
-            courseId: result.insertId
+            courseId,
+            expiry_date: expiryDate,
+            duration_days: durationOption.days
         });
     } catch (error) {
         console.error('Error uploading course:', error);
-        return res.status(500).json({
-            error: 'Failed to upload course',
+        const status = String(error.message || '').includes('Cloudinary upload is unavailable') ? 503 : 500;
+        return res.status(status).json({
+            error: status === 503 ? error.message : 'Failed to upload course',
             details: error.message
         });
     }
@@ -1041,6 +1512,7 @@ app.delete('/api/account/student', async (req, res) => {
         await db.query('DELETE FROM enrollments WHERE student_email = ?', [email]);
         await db.query('DELETE FROM course_video_progress WHERE student_email = ?', [email]);
         await db.query('DELETE FROM course_views WHERE student_email = ?', [email]);
+        await db.query('DELETE FROM notifications WHERE user_id = ?', [userId]);
         await db.query('DELETE FROM password_reset_otps WHERE user_id = ?', [userId]);
         await db.query('DELETE FROM users WHERE id = ?', [userId]);
 
@@ -1071,6 +1543,7 @@ app.delete('/api/account/instructor', async (req, res) => {
         const userId = rows[0].id;
 
         const removedCourses = await deleteInstructorCourses(userId);
+        await db.query('DELETE FROM notifications WHERE user_id = ?', [userId]);
         await db.query('DELETE FROM password_reset_otps WHERE user_id = ?', [userId]);
         await db.query('DELETE FROM users WHERE id = ?', [userId]);
 
@@ -1081,6 +1554,98 @@ app.delete('/api/account/instructor', async (req, res) => {
     } catch (error) {
         console.error('Instructor account delete error:', error);
         return res.status(500).json({ error: 'Failed to delete account' });
+    }
+});
+
+app.get(['/notifications/:userId', '/api/notifications/:userId'], async (req, res) => {
+    try {
+        const userId = asPositiveInt(req.params.userId);
+        if (!userId) {
+            return res.status(400).json({ error: 'Valid user ID is required' });
+        }
+
+        const [rows] = await db.query(
+            `SELECT id, user_id, message, type, is_read, created_at
+             FROM notifications
+             WHERE user_id = ?
+             ORDER BY created_at DESC, id DESC`,
+            [userId]
+        );
+
+        return res.json(rows.map((notification) => ({
+            id: notification.id,
+            user_id: notification.user_id,
+            message: notification.message,
+            type: notification.type,
+            is_read: Boolean(notification.is_read),
+            created_at: notification.created_at
+        })));
+    } catch (error) {
+        console.error('Notifications fetch error:', error);
+        return res.status(500).json({ error: 'Failed to fetch notifications' });
+    }
+});
+
+app.get('/api/instructor-messages/:instructorId', async (req, res) => {
+    try {
+        const instructorId = asPositiveInt(req.params.instructorId);
+        if (!instructorId) {
+            return res.status(400).json({ error: 'Valid instructor ID is required' });
+        }
+
+        const [rows] = await db.query(
+            `SELECT id, instructor_id, title, content, priority, sent_count, created_at
+             FROM messages
+             WHERE instructor_id = ?
+             ORDER BY created_at DESC, id DESC`,
+            [instructorId]
+        );
+
+        return res.json(rows.map((message) => ({
+            id: message.id,
+            instructor_id: message.instructor_id,
+            title: message.title,
+            content: message.content,
+            priority: message.priority,
+            sent_count: Number(message.sent_count || 0),
+            type: 'sent_message',
+            message: message.title && message.title !== 'Message'
+                ? `[${String(message.priority || 'normal').toUpperCase()}] ${message.title}: ${message.content}`
+                : message.content,
+            created_at: message.created_at
+        })));
+    } catch (error) {
+        console.error('Instructor messages fetch error:', error);
+        return res.status(500).json({ error: 'Failed to fetch instructor messages' });
+    }
+});
+
+app.put(['/notifications/read/:notificationId', '/api/notifications/read/:notificationId'], async (req, res) => {
+    try {
+        const notificationId = asPositiveInt(req.params.notificationId);
+        const userId = asPositiveInt(req.body.user_id);
+
+        if (!notificationId) {
+            return res.status(400).json({ error: 'Valid notification ID is required' });
+        }
+
+        const params = [notificationId];
+        let updateQuery = 'UPDATE notifications SET is_read = 1 WHERE id = ?';
+
+        if (userId) {
+            updateQuery += ' AND user_id = ?';
+            params.push(userId);
+        }
+
+        const [result] = await db.query(updateQuery, params);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Notification not found' });
+        }
+
+        return res.json({ message: 'Notification marked as read' });
+    } catch (error) {
+        console.error('Notification update error:', error);
+        return res.status(500).json({ error: 'Failed to update notification' });
     }
 });
 
@@ -1225,7 +1790,7 @@ app.get('/api/student-profile', async (req, res) => {
         }
 
         const [rows] = await db.query(
-            `SELECT username AS name, email, branch, profile_photo
+            `SELECT id, username AS name, email, branch, profile_photo
              FROM users
              WHERE email = ? AND role = 'student'`,
             [email]
@@ -1237,6 +1802,7 @@ app.get('/api/student-profile', async (req, res) => {
 
         const student = rows[0];
         return res.json({
+            id: student.id,
             name: student.name,
             email: student.email,
             branch: student.branch || '',
@@ -1327,7 +1893,13 @@ app.post('/api/enroll', async (req, res) => {
             return res.status(400).json({ error: 'studentEmail and valid courseId are required' });
         }
 
-        const [courses] = await db.query('SELECT id FROM courses WHERE id = ?', [numericCourseId]);
+        const [courses] = await db.query(
+            `SELECT id
+             FROM courses
+             WHERE id = ?
+               AND (expiry_date IS NULL OR expiry_date > NOW())`,
+            [numericCourseId]
+        );
         if (courses.length === 0) {
             return res.status(404).json({ error: 'Course not found' });
         }
@@ -1393,7 +1965,10 @@ app.get('/api/course-views/:studentEmail', async (req, res) => {
                 c.description,
                 c.cover_path,
                 c.video_path,
-                c.difficulty,
+                c.duration,
+                c.duration_days,
+                c.duration_label,
+                c.expiry_date,
                 c.enrolled_students,
                 cv.total_time_spent,
                 cv.last_viewed,
@@ -1402,6 +1977,7 @@ app.get('/api/course-views/:studentEmail', async (req, res) => {
              INNER JOIN courses c ON c.id = cv.course_id
              LEFT JOIN users u ON u.id = c.instructor_id
              WHERE cv.student_email = ?
+               AND (c.expiry_date IS NULL OR c.expiry_date > NOW())
              ORDER BY cv.last_viewed DESC`,
             [studentEmail]
         );
@@ -1428,12 +2004,13 @@ app.get('/api/instructor-dashboard/:instructorId', async (req, res) => {
         const [courseRows] = await db.query(
             `SELECT
                 c.*,
-                COUNT(DISTINCT cv.id) AS video_count,
+                COUNT(DISTINCT v.id) AS video_count,
                 COUNT(DISTINCT cvw.id) AS watch_record_count
              FROM courses c
-             LEFT JOIN course_videos cv ON cv.course_id = c.id
+             LEFT JOIN videos v ON v.course_id = c.id
              LEFT JOIN course_views cvw ON cvw.course_id = c.id
              WHERE c.instructor_id = ?
+               AND (c.expiry_date IS NULL OR c.expiry_date > NOW())
              GROUP BY c.id
              ORDER BY c.created_at DESC`,
             [instructorId]
@@ -1456,12 +2033,17 @@ app.get('/api/instructor-dashboard/:instructorId', async (req, res) => {
         const averageEnrollment = totalCourses > 0 ? Number((totalStudents / totalCourses).toFixed(2)) : 0;
         const latestUpload = courses.length > 0 ? courses[0].created_at : null;
         const zeroEnrollmentCourses = courses.filter((course) => Number(course.enrolled_students || 0) === 0).length;
+        const expiringCourses = courses.filter((course) => {
+            const daysRemaining = Number(course.days_remaining);
+            return Number.isFinite(daysRemaining) && daysRemaining > 0 && daysRemaining <= 7;
+        }).length;
 
         const [watchSummaryRows] = await db.query(
             `SELECT COALESCE(SUM(cv.total_time_spent), 0) AS totalWatchSeconds
              FROM course_views cv
              INNER JOIN courses c ON c.id = cv.course_id
-             WHERE c.instructor_id = ?`,
+             WHERE c.instructor_id = ?
+               AND (c.expiry_date IS NULL OR c.expiry_date > NOW())`,
             [instructorId]
         );
 
@@ -1472,14 +2054,14 @@ app.get('/api/instructor-dashboard/:instructorId', async (req, res) => {
                 c.id,
                 c.title,
                 c.category,
-                c.difficulty,
                 c.enrolled_students,
                 COALESCE(SUM(cv.total_time_spent), 0) AS totalWatchSeconds,
                 COUNT(cv.id) AS watchRecords
              FROM courses c
              LEFT JOIN course_views cv ON cv.course_id = c.id
              WHERE c.instructor_id = ?
-             GROUP BY c.id, c.title, c.category, c.difficulty, c.enrolled_students
+               AND (c.expiry_date IS NULL OR c.expiry_date > NOW())
+             GROUP BY c.id, c.title, c.category, c.enrolled_students
              ORDER BY totalWatchSeconds DESC, watchRecords DESC
              LIMIT 5`,
             [instructorId]
@@ -1500,6 +2082,7 @@ app.get('/api/instructor-dashboard/:instructorId', async (req, res) => {
                 totalCourses,
                 totalStudents,
                 averageEnrollment,
+                expiringCourses,
                 zeroEnrollmentCourses,
                 latestUpload,
                 totalWatchSeconds,
@@ -1509,14 +2092,12 @@ app.get('/api/instructor-dashboard/:instructorId', async (req, res) => {
                 id: topCourse.id,
                 title: topCourse.title,
                 enrolled_students: Number(topCourse.enrolled_students || 0),
-                category: topCourse.category,
-                difficulty: topCourse.difficulty
+                category: topCourse.category
             } : null,
             topWatchedCourses: topWatchedRows.map((row) => ({
                 id: row.id,
                 title: row.title,
                 category: row.category,
-                difficulty: row.difficulty,
                 enrolled_students: Number(row.enrolled_students || 0),
                 totalWatchSeconds: Number(row.totalWatchSeconds || 0),
                 totalWatchHours: formatWatchHoursFromSeconds(row.totalWatchSeconds),
@@ -1542,7 +2123,8 @@ app.get('/api/instructor-summary/:instructorId', async (req, res) => {
                 COUNT(*) AS activeCourses,
                 COALESCE(SUM(enrolled_students), 0) AS totalStudents
              FROM courses
-             WHERE instructor_id = ?`,
+             WHERE instructor_id = ?
+               AND (expiry_date IS NULL OR expiry_date > NOW())`,
             [instructorId]
         );
 
@@ -1553,6 +2135,128 @@ app.get('/api/instructor-summary/:instructorId', async (req, res) => {
     } catch (error) {
         console.error('Instructor summary fetch error:', error);
         return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/send-message-to-students', async (req, res) => {
+    const instructorId = asPositiveInt(req.body.instructorId);
+    const title = String(req.body.title || '').trim();
+    const content = String(req.body.content || '').trim();
+    const priority = String(req.body.priority || 'normal').trim().toLowerCase();
+
+    if (!instructorId || !title || !content) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    try {
+        const [enrolledStudents] = await db.query(
+            `SELECT DISTINCT u.id as user_id
+             FROM enrollments e
+             JOIN courses c ON e.course_id = c.id
+             JOIN users u ON e.student_email = u.email
+             WHERE c.instructor_id = ?
+               AND u.role = 'student'
+               AND (c.expiry_date IS NULL OR c.expiry_date > NOW())`,
+            [instructorId]
+        );
+
+        if (enrolledStudents.length === 0) {
+            return res.status(200).json({ message: 'No students enrolled in your courses', sent: 0 });
+        }
+
+        const fullMessage = `[${priority.toUpperCase()}] ${title}: ${content}`;
+        const sent = await createNotifications(
+            enrolledStudents.map((student) => student.user_id),
+            fullMessage,
+            'instructor_message'
+        );
+
+        const createdAt = new Date();
+        await db.query(
+            `INSERT INTO messages (instructor_id, title, content, priority, sent_count, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [instructorId, title, content, priority, sent, createdAt]
+        );
+
+        return res.json({ 
+            message: 'Message sent successfully', 
+            sent,
+            timestamp: createdAt
+        });
+    } catch (error) {
+        console.error('Send message error:', error);
+        return res.status(500).json({
+            error: 'Failed to send message',
+            details: error.message
+        });
+    }
+});
+
+app.post('/api/terminate-instructor', async (req, res) => {
+    const { instructorId, instructorEmail } = req.body;
+
+    if (!instructorId || !instructorEmail) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    try {
+        // Start transaction for atomic deletion
+        const connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // Get all courses for this instructor
+            const [courses] = await connection.query(
+                'SELECT id FROM courses WHERE instructor_id = ?',
+                [instructorId]
+            );
+
+            // Delete videos for all courses
+            for (const course of courses) {
+                await connection.query(
+                    'DELETE FROM course_videos WHERE course_id = ?',
+                    [course.id]
+                );
+            }
+
+            // Delete enrollments for all courses
+            for (const course of courses) {
+                await connection.query(
+                    'DELETE FROM enrollments WHERE course_id = ?',
+                    [course.id]
+                );
+            }
+
+            // Delete courses
+            await connection.query(
+                'DELETE FROM courses WHERE instructor_id = ?',
+                [instructorId]
+            );
+
+            // Delete messages sent by this instructor
+            await connection.query(
+                'DELETE FROM messages WHERE instructor_id = ?',
+                [instructorId]
+            );
+
+            // Delete instructor
+            await connection.query(
+                'DELETE FROM instructors WHERE id = ?',
+                [instructorId]
+            );
+
+            await connection.commit();
+            connection.release();
+
+            return res.json({ message: 'Account terminated successfully' });
+        } catch (error) {
+            await connection.rollback();
+            connection.release();
+            throw error;
+        }
+    } catch (error) {
+        console.error('Terminate instructor error:', error);
+        return res.status(500).json({ error: 'Failed to terminate account' });
     }
 });
 
@@ -1575,20 +2279,36 @@ app.use((err, req, res, next) => {
 
     return res.status(500).json({
         error: 'Internal server error',
-        message: err.message
+        message: err.message,
+        path: req.path,
+        method: req.method
     });
 });
 
-app.use((req, res, next) => {
+app.use((req, res) => {
     const wantsJson = (req.headers.accept && req.headers.accept.includes('application/json')) ||
         req.path.startsWith('/api') ||
-        req.path === '/submit-course';
+        req.path === '/submit-course' ||
+        /^\/(courses|videos|notifications)(\/|$)/.test(req.path) ||
+        req.method !== 'GET';
 
     if (wantsJson) {
-        return res.status(404).json({ error: 'Not found' });
+        return res.status(404).json({ 
+            message: 'Route not found',
+            details: {
+                path: req.path,
+                method: req.method
+            }
+        });
     }
 
-    return next();
+    // For HTML requests, try to serve index.html as fallback
+    res.status(404).sendFile(path.join(__dirname, '..', 'HTML', 'index.html')).catch(() => {
+        res.status(404).json({ 
+            message: 'Route not found',
+            path: req.path
+        });
+    });
 });
 
 app.listen(port, () => {

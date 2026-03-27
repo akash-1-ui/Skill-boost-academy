@@ -24,6 +24,7 @@
             <li><a href="#dashboard" data-view-link="dashboard" class="active" aria-current="page">Dashboard</a></li>
             <li><a href="#add-course" data-view-link="add-course">Add Course</a></li>
             <li><a href="#add-course-video" data-view-link="add-course-video">Add Course Video</a></li>
+            <li><a href="notifications.html?role=instructor">Notifications</a></li>
             <li><a href="#" data-profile-toggle>Profile</a></li>
         </ul>
         <div class="sidebar-footer">
@@ -48,58 +49,140 @@
                 </header>
 
                 <div class="dashboard-stats">
-                    <div class="stat-card">
-                        <h3>Total Courses</h3>
-                        <p id="totalCourses">0</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Total Students</h3>
-                        <p id="totalStudents">0</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Average Enrollment</h3>
-                        <p id="avgEnrollment">0</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Total Watch Hours</h3>
-                        <p id="totalWatchHours">0</p>
-                    </div>
+                    <article class="stat-card stat-card-courses">
+                        <div class="stat-card-header">
+                            <div>
+                                <h3>Total Courses</h3>
+                                <p class="stat-card-note">Published in your studio</p>
+                            </div>
+                            <span class="stat-chip">Library</span>
+                        </div>
+                        <div class="stat-card-value-row">
+                            <p class="stat-value" id="totalCourses">0</p>
+                            <span class="stat-card-unit">courses</span>
+                        </div>
+                    </article>
+                    <article class="stat-card stat-card-students">
+                        <div class="stat-card-header">
+                            <div>
+                                <h3>Active Students</h3>
+                                <p class="stat-card-note">Learning across your courses</p>
+                            </div>
+                            <span class="stat-chip">Live</span>
+                        </div>
+                        <div class="stat-card-value-row">
+                            <p class="stat-value" id="totalStudents">0</p>
+                            <span class="stat-card-unit">students</span>
+                        </div>
+                    </article>
+                    <article class="stat-card stat-card-expiring">
+                        <div class="stat-card-header">
+                            <div>
+                                <h3>Expiring Courses</h3>
+                                <p class="stat-card-note">Need review or refresh soon</p>
+                            </div>
+                            <span class="stat-chip">Action</span>
+                        </div>
+                        <div class="stat-card-value-row">
+                            <p class="stat-value" id="expiringCourses">0</p>
+                            <span class="stat-card-unit">courses</span>
+                        </div>
+                    </article>
+                    <article class="stat-card stat-card-watch">
+                        <div class="stat-card-header">
+                            <div>
+                                <h3>Total Watch Hours</h3>
+                                <p class="stat-card-note">Streaming time from enrolled learners</p>
+                            </div>
+                            <span class="stat-chip">Pulse</span>
+                        </div>
+                        <div class="stat-card-value-row">
+                            <p class="stat-value" id="totalWatchHours">0</p>
+                            <span class="stat-card-unit">hours</span>
+                        </div>
+                    </article>
                 </div>
 
-                <section class="insights-section">
-                    <h2>Performance Insights</h2>
-                    <div class="insight-grid">
-                        <div class="insight-card">
-                            <h4>Top Course</h4>
-                            <p id="topCourseName">No courses yet</p>
+                <section class="courses-section analytics-section dashboard-switcher-section">
+                    <div class="dashboard-switcher-head">
+                        <div>
+                            <p class="section-kicker">Analytics</p>
+                            <div class="dashboard-switcher-tabs" role="tablist" aria-label="Dashboard analytics views">
+                                <button
+                                    type="button"
+                                    class="dashboard-tab is-active"
+                                    id="dashboardTabInsights"
+                                    data-dashboard-tab="insights"
+                                    role="tab"
+                                    aria-selected="true"
+                                    aria-controls="dashboardPanelInsights"
+                                >
+                                    Performance Insights
+                                </button>
+                                <button
+                                    type="button"
+                                    class="dashboard-tab"
+                                    id="dashboardTabWatch"
+                                    data-dashboard-tab="watch"
+                                    role="tab"
+                                    aria-selected="false"
+                                    aria-controls="dashboardPanelWatch"
+                                >
+                                    Top Watched Courses
+                                </button>
+                            </div>
                         </div>
-                        <div class="insight-card">
-                            <h4>Latest Upload</h4>
-                            <p id="latestUpload">No uploads yet</p>
-                        </div>
-                        <div class="insight-card">
-                            <h4>Courses with 0 Enrollment</h4>
-                            <p id="zeroEnrollCount">0</p>
-                        </div>
-                        <div class="insight-card">
-                            <h4>Highest Watched Course</h4>
-                            <p id="highestWatchedCourse">No watch data</p>
+                        <p class="section-subtitle dashboard-switcher-copy">Click a heading to switch between quick insights and the watched course list.</p>
+                    </div>
+
+                    <div
+                        class="dashboard-tab-panel is-active"
+                        id="dashboardPanelInsights"
+                        data-dashboard-panel="insights"
+                        role="tabpanel"
+                        aria-labelledby="dashboardTabInsights"
+                    >
+                        <div class="insight-grid">
+                            <article class="insight-card">
+                                <div class="insight-card-header">
+                                    <h4>Top Course</h4>
+                                    <span class="insight-pill">Highest demand</span>
+                                </div>
+                                <p class="insight-value" id="topCourseName">No courses yet</p>
+                                <p class="insight-meta">Based on current learner enrollments.</p>
+                            </article>
+                            <article class="insight-card">
+                                <div class="insight-card-header">
+                                    <h4>Latest Upload</h4>
+                                    <span class="insight-pill">Recent</span>
+                                </div>
+                                <p class="insight-value" id="latestUpload">No uploads yet</p>
+                                <p class="insight-meta">Most recently published lesson or course update.</p>
+                            </article>
                         </div>
                     </div>
-                </section>
 
-                <section class="courses-section">
-                    <h2>Top Watched Courses</h2>
-                    <table class="course-table" id="topWatchedTable">
-                        <thead>
-                            <tr>
-                                <th>Course</th>
-                                <th>Watch Hours</th>
-                                <th>Watch Records</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+                    <div
+                        class="dashboard-tab-panel"
+                        id="dashboardPanelWatch"
+                        data-dashboard-panel="watch"
+                        role="tabpanel"
+                        aria-labelledby="dashboardTabWatch"
+                        hidden
+                    >
+                        <div class="table-shell">
+                            <table class="course-table" id="topWatchedTable">
+                                <thead>
+                                    <tr>
+                                        <th>Course</th>
+                                        <th>Watch Hours</th>
+                                        <th>Watch Records</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </section>
 
                 <section class="courses-section">
@@ -129,12 +212,38 @@
                 </div>
                 <div class="form-shell">
                     <div class="form-card">
-                        <form id="createCourseForm" class="dashboard-form" action="http://localhost:3000/submit-course" method="POST" enctype="multipart/form-data">
+                        <form id="createCourseForm" class="dashboard-form" action="http://localhost:3000/courses" method="POST" enctype="multipart/form-data">
                             <label for="title">Course Title</label>
                             <input type="text" id="title" name="title" required />
 
-                            <label for="duration">Course Duration (in hours)</label>
-                            <input type="number" id="duration" name="duration" required min="1" step="0.1" />
+                            <fieldset class="duration-fieldset">
+                                <legend>Course Duration</legend>
+                                <div class="duration-selector" role="radiogroup" aria-label="Course duration">
+                                    <input type="radio" id="duration-30" name="duration_days" value="30" />
+                                    <label for="duration-30">
+                                        <span>30 days</span>
+                                        <small>Short course</small>
+                                    </label>
+
+                                    <input type="radio" id="duration-60" name="duration_days" value="60" />
+                                    <label for="duration-60">
+                                        <span>60 days</span>
+                                        <small>Medium course</small>
+                                    </label>
+
+                                    <input type="radio" id="duration-90" name="duration_days" value="90" checked />
+                                    <label for="duration-90">
+                                        <span>90 days</span>
+                                        <small>Full course</small>
+                                    </label>
+
+                                    <input type="radio" id="duration-180" name="duration_days" value="180" />
+                                    <label for="duration-180">
+                                        <span>180 days</span>
+                                        <small>Advanced course</small>
+                                    </label>
+                                </div>
+                            </fieldset>
 
                             <label for="cover">Cover Page</label>
                             <input type="file" id="cover" name="cover" accept="image/*" required />
@@ -142,14 +251,6 @@
 
                             <label for="category">Category</label>
                             <input type="text" id="category" name="category" required />
-
-                            <label for="difficulty">Difficulty</label>
-                            <select id="difficulty" name="difficulty" required>
-                                <option value="">Select difficulty</option>
-                                <option value="Beginner">Beginner</option>
-                                <option value="Intermediate">Intermediate</option>
-                                <option value="Advanced">Advanced</option>
-                            </select>
 
                             <input type="hidden" id="instructor_id" name="instructor_id" />
 
@@ -173,6 +274,7 @@
                 <div class="form-shell">
                     <div class="form-card">
                         <p class="form-hint" id="manageCourseNote">Managing: <strong id="manageCourseTitle">Select a course</strong></p>
+                        <p class="form-hint">Videos are uploaded to Cloudinary and removed automatically when the course expires.</p>
                         <form id="uploadVideoForm" class="dashboard-form" enctype="multipart/form-data">
                             <label for="courseSelect">Select Course</label>
                             <select id="courseSelect" name="course_id" required>
@@ -192,8 +294,64 @@
                     </div>
                 </div>
             </section>
+
         </div>
     </main>
+
+    <!-- Course Details Modal for Instructor -->
+    <div class="course-modal-overlay" id="courseModalOverlay" inert></div>
+    <div class="course-modal" id="courseModal" inert>
+        <div class="course-modal-content">
+            <button type="button" class="course-modal-close" id="courseModalClose" aria-label="Close course details">
+                <span>✕</span>
+            </button>
+            <div class="course-modal-header">
+                <img id="courseModalCover" src="" alt="Course cover" class="course-modal-cover">
+                <div class="course-modal-badge" id="courseModalStatus">Active</div>
+            </div>
+            <div class="course-modal-body">
+                <h2 id="courseModalTitle">Course Title</h2>
+                <div class="course-modal-meta">
+                    <div class="meta-group">
+                        <label>Category</label>
+                        <p id="courseModalCategory">Category</p>
+                    </div>
+                    <div class="meta-group">
+                        <label>Duration</label>
+                        <p id="courseModalDuration">90 days</p>
+                    </div>
+                    <div class="meta-group">
+                        <label>Enrolled Students</label>
+                        <p id="courseModalEnrolled">0</p>
+                    </div>
+                    <div class="meta-group">
+                        <label>Videos</label>
+                        <p id="courseModalVideos">0</p>
+                    </div>
+                </div>
+                <div class="course-modal-description">
+                    <h3>About This Course</h3>
+                    <p id="courseModalDescription">Course description goes here</p>
+                </div>
+                <div class="course-modal-expiry">
+                    <p id="courseModalExpiry">Expiry information</p>
+                </div>
+                <div class="course-modal-progress">
+                    <div class="progress-header">
+                        <span>Course Readiness</span>
+                        <strong id="courseModalProgressPercent">0%</strong>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="courseModalProgressFill" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="course-modal-actions">
+                    <button type="button" class="btn-primary" id="courseModalManageBtn">Manage Videos</button>
+                    <button type="button" class="btn-danger" id="courseModalDeleteBtn">Delete Course</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="profile-drawer" id="profileDrawer" data-role="instructor" aria-hidden="true">
         <div class="drawer-header">
@@ -316,11 +474,79 @@
         const initialView = location.hash ? location.hash.replace('#', '') : 'dashboard';
         setActiveView(initialView || 'dashboard', { syncHash: false, scroll: false });
 
+        const dashboardTabs = Array.from(document.querySelectorAll('[data-dashboard-tab]'));
+        const dashboardPanels = Array.from(document.querySelectorAll('[data-dashboard-panel]'));
+
+        function setActiveDashboardTab(tabId) {
+            const activeTab = dashboardTabs.find((tab) => tab.dataset.dashboardTab === tabId) || dashboardTabs[0];
+            const activePanelId = activeTab?.dataset.dashboardTab;
+
+            dashboardTabs.forEach((tab) => {
+                const isActive = tab === activeTab;
+                tab.classList.toggle('is-active', isActive);
+                tab.setAttribute('aria-selected', String(isActive));
+                tab.tabIndex = isActive ? 0 : -1;
+            });
+
+            dashboardPanels.forEach((panel) => {
+                const isActive = panel.dataset.dashboardPanel === activePanelId;
+                panel.classList.toggle('is-active', isActive);
+                panel.hidden = !isActive;
+            });
+        }
+
+        dashboardTabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => {
+                setActiveDashboardTab(tab.dataset.dashboardTab);
+            });
+
+            tab.addEventListener('keydown', (event) => {
+                if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+                event.preventDefault();
+                const direction = event.key === 'ArrowRight' ? 1 : -1;
+                const nextIndex = (index + direction + dashboardTabs.length) % dashboardTabs.length;
+                const nextTab = dashboardTabs[nextIndex];
+                if (!nextTab) return;
+                setActiveDashboardTab(nextTab.dataset.dashboardTab);
+                nextTab.focus();
+            });
+        });
+
+        setActiveDashboardTab('insights');
+
         function formatDate(value) {
             if (!value) return 'N/A';
             const date = new Date(value);
             if (Number.isNaN(date.getTime())) return 'N/A';
             return date.toLocaleDateString();
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function getStatusClass(status) {
+            const normalized = String(status || '').toLowerCase().replace(/\s+/g, '-');
+            return `status-${normalized || 'active'}`;
+        }
+
+        function formatExpiryLine(course) {
+            if (!course || !course.expiry_date) {
+                return 'Expiry date unavailable';
+            }
+
+            const dateLabel = formatDate(course.expiry_date);
+            const daysRemaining = Number(course.days_remaining || 0);
+            if (daysRemaining > 0) {
+                return `Expires ${dateLabel} • ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left`;
+            }
+
+            return `Expired ${dateLabel}`;
         }
 
         function updateCourseLibraryBadge(total) {
@@ -415,20 +641,22 @@
                 window.openCourseEditor(course);
             } else {
                 const title = document.getElementById('title');
-                const duration = document.getElementById('duration');
                 const category = document.getElementById('category');
-                const difficulty = document.getElementById('difficulty');
                 const description = document.getElementById('description');
                 if (title) title.value = course.title || '';
-                if (duration) duration.value = course.duration || '';
+                const durationInput = document.querySelector(`input[name="duration_days"][value="${Number(course.duration_days || 90)}"]`);
+                if (durationInput) durationInput.checked = true;
                 if (category) category.value = course.category || '';
-                if (difficulty) difficulty.value = course.difficulty || '';
                 if (description) description.value = course.description || '';
             }
         }
 
         function openCourseViewer(course) {
-            if (!course) return;
+            if (!course || !course.id) {
+                console.error('❌ openCourseViewer: invalid course object');
+                return;
+            }
+            console.log('✅ Navigating to course viewer with courseId:', course.id);
             window.location.href = `instructor_course_videos.html?courseId=${course.id}`;
         }
 
@@ -451,13 +679,6 @@
                             <span class="skeleton-pill"></span>
                             <span class="skeleton-pill"></span>
                         </div>
-                        <div class="course-progress-block">
-                            <div class="course-progress-head">
-                                <span class="skeleton-line short"></span>
-                                <span class="skeleton-line micro"></span>
-                            </div>
-                            <div class="course-progress"><span style="width: 45%;"></span></div>
-                        </div>
                         <div class="course-actions">
                             <span class="skeleton-button"></span>
                             <span class="skeleton-button secondary"></span>
@@ -476,10 +697,9 @@
                 course.cover_path || course.cover,
                 course.description,
                 course.duration,
-                course.category,
-                course.difficulty
+                course.category
             ].filter((value) => String(value || '').trim()).length;
-            const completenessRatio = completenessSignals / 5;
+            const completenessRatio = completenessSignals / 4;
             const progress = Math.round((completenessRatio * 0.35 + videoRatio * 0.25 + enrolledRatio * 0.25 + watchRatio * 0.15) * 100);
             return Math.max(progress, completenessSignals > 0 ? 18 : 0);
         }
@@ -520,41 +740,70 @@
                     ? `<img src="${coverPath}" alt="${course.title || 'Course cover'}" loading="lazy" onerror="this.closest('.course-cover').classList.add('is-fallback'); this.remove();">`
                     : '<div class="course-cover-fallback">No cover</div>';
                 const lessonCount = Number(course.video_count || 0);
-                const watchRecords = Number(course.watch_record_count || 0);
                 const enrolledStudents = Number(course.enrolled_students || 0);
                 const progress = getCourseProgress(course, maxEnrolled, maxVideos, maxWatchRecords);
+                const safeTitle = escapeHtml(course.title || 'Untitled Course');
+                const safeCategory = escapeHtml(course.category || 'Course Studio');
+                const safeDescription = escapeHtml(course.description || 'Add a concise summary so learners know exactly what this course covers.');
+                const safeDuration = escapeHtml(course.duration_summary || course.duration || 'Self-paced');
+                const safeStatus = escapeHtml(course.status || 'Active');
+                const safeExpiryLine = escapeHtml(formatExpiryLine(course));
 
                 card.innerHTML = `
                     <div class="course-cover">${coverMarkup}</div>
                     <div class="course-card-body">
                         <div class="course-card-top">
                             <div>
-                                <p class="course-eyebrow">${course.category || 'Course Studio'}</p>
-                                <h3>${course.title || 'Untitled Course'}</h3>
+                                <p class="course-eyebrow">${safeCategory}</p>
+                                <h3>${safeTitle}</h3>
                             </div>
-                            <span class="course-status-badge">${enrolledStudents} ${enrolledStudents === 1 ? 'student' : 'students'}</span>
+                            <div class="course-card-actions-top">
+                                <button type="button" class="course-info-btn" data-course-id="${course.id}" title="View course info">ⓘ</button>
+                                <span class="course-status-badge ${getStatusClass(course.status)}">${safeStatus}</span>
+                            </div>
                         </div>
-                        <p class="course-card-prompt">Click to open course options</p>
+                        <p class="course-card-summary">${safeDescription}</p>
                         <div class="course-card-details">
                             <div class="course-meta">
-                                <span>${course.difficulty || 'All levels'}</span>
-                                <span>${course.duration || 'Self-paced'}</span>
+                                <span>${safeDuration}</span>
                                 <span>${lessonCount} ${lessonCount === 1 ? 'lesson' : 'lessons'}</span>
                             </div>
-                            <div class="course-progress-block">
-                                <div class="course-progress-head">
-                                    <span>Course readiness</span>
-                                    <strong>${progress}%</strong>
-                                </div>
-                                <div class="course-progress">
-                                    <span style="width: ${progress}%"></span>
-                                </div>
-                                <p class="course-hint">${watchRecords} ${watchRecords === 1 ? 'watch record' : 'watch records'} tracked</p>
-                            </div>
+                            <p class="course-expiry-line">${safeExpiryLine}</p>
                             <div class="course-actions">
-                                <button type="button" class="course-btn manage" data-action="manage">Manage</button>
-                                <button type="button" class="course-btn view" data-action="view">View</button>
-                                <button type="button" class="course-btn edit" data-action="edit">Edit</button>
+                                <button type="button" class="course-btn manage" data-action="manage" data-course-id="${course.id}">Manage</button>
+                                <button type="button" class="course-btn delete" data-action="delete" data-course-id="${course.id}">Delete</button>
+                            </div>
+                        </div>
+                        <div class="course-info-container" style="display: none;">
+                            <div class="course-info-header">
+                                <h4>${safeTitle}</h4>
+                                <button type="button" class="course-info-close" aria-label="Close info">✕</button>
+                            </div>
+                            <div class="course-info-body">
+                                <div class="info-item">
+                                    <span class="info-label">Category:</span>
+                                    <span class="info-value">${safeCategory}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Duration:</span>
+                                    <span class="info-value">${safeDuration}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Videos:</span>
+                                    <span class="info-value">${lessonCount}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Students:</span>
+                                    <span class="info-value">${enrolledStudents}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Readiness:</span>
+                                    <span class="info-value">${progress}%</span>
+                                </div>
+                                <div class="info-item info-description">
+                                    <span class="info-label">About:</span>
+                                    <span class="info-value">${safeDescription}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -563,29 +812,51 @@
                 card.tabIndex = 0;
                 card.setAttribute('role', 'button');
                 card.setAttribute('aria-expanded', 'false');
+                card.dataset.courseId = course.id;
+                card.dataset.courseData = JSON.stringify(course);
 
                 card.addEventListener('click', (event) => {
-                    const actionBtn = event.target.closest('button');
-                    if (actionBtn) {
-                        const action = actionBtn.dataset.action;
-                        if (action === 'manage') {
-                            openCourseManager(course);
-                        } else if (action === 'edit') {
-                            openCourseEditor(course);
-                        } else {
-                            openCourseViewer(course);
+                    const infoBtn = event.target.closest('.course-info-btn');
+                    if (infoBtn) {
+                        event.stopPropagation();
+                        const infoContainer = card.querySelector('.course-info-container');
+                        if (infoContainer) {
+                            infoContainer.style.display = infoContainer.style.display === 'none' ? 'block' : 'none';
                         }
                         return;
                     }
-                    const isExpanded = card.classList.contains('is-expanded');
-                    grid.querySelectorAll('.course-card.is-expanded').forEach((item) => {
-                        item.classList.remove('is-expanded');
-                        item.setAttribute('aria-expanded', 'false');
-                    });
-                    if (!isExpanded) {
-                        card.classList.add('is-expanded');
-                        card.setAttribute('aria-expanded', 'true');
+
+                    const infoClose = event.target.closest('.course-info-close');
+                    if (infoClose) {
+                        event.stopPropagation();
+                        const infoContainer = card.querySelector('.course-info-container');
+                        if (infoContainer) {
+                            infoContainer.style.display = 'none';
+                        }
+                        return;
                     }
+
+                    if (event.target.closest('.course-info-container')) {
+                        return;
+                    }
+
+                    const actionBtn = event.target.closest('.course-btn');
+                    if (actionBtn) {
+                        const action = actionBtn.dataset.action;
+                        const courseId = actionBtn.dataset.courseId || event.currentTarget.dataset.courseId;
+                        console.log('🎯 Action button clicked:', action, 'courseId:', courseId);
+                        
+                        if (action === 'manage') {
+                            console.log('✅ Opening course viewer for courseId:', courseId);
+                            window.location.href = `instructor_course_videos.html?courseId=${courseId}`;
+                        } else if (action === 'delete') {
+                            console.log('Deleting course:', courseId);
+                            deleteCourse(courseId);
+                        }
+                        return;
+                    }
+
+                    openCourseViewer(course);
                 });
 
                 card.addEventListener('keydown', (event) => {
@@ -597,6 +868,96 @@
                 grid.appendChild(card);
             });
         }
+
+        let currentModalCourse = null;
+
+        function openCourseDetailsModal(course) {
+            if (!course) return;
+            currentModalCourse = course;
+            
+            const modal = document.getElementById('courseModal');
+            const overlay = document.getElementById('courseModalOverlay');
+            if (!modal || !overlay) return;
+
+            // Update modal content
+            const coverEl = document.getElementById('courseModalCover');
+            if (coverEl) coverEl.src = resolveAssetPath(course.cover_path || course.cover, '/uploads/covers');
+            
+            const titleEl = document.getElementById('courseModalTitle');
+            if (titleEl) titleEl.textContent = course.title || 'Untitled Course';
+            
+            const statusEl = document.getElementById('courseModalStatus');
+            if (statusEl) statusEl.textContent = course.status || 'Active';
+            
+            const categoryEl = document.getElementById('courseModalCategory');
+            if (categoryEl) categoryEl.textContent = course.category || 'General';
+            
+            const durationEl = document.getElementById('courseModalDuration');
+            if (durationEl) durationEl.textContent = (course.duration_days || 90) + ' days';
+            
+            const enrolledEl = document.getElementById('courseModalEnrolled');
+            if (enrolledEl) enrolledEl.textContent = course.enrolled_students || 0;
+            
+            const videosEl = document.getElementById('courseModalVideos');
+            if (videosEl) videosEl.textContent = course.video_count || 0;
+            
+            const descEl = document.getElementById('courseModalDescription');
+            if (descEl) descEl.textContent = course.description || 'No description available';
+            
+            const expiryEl = document.getElementById('courseModalExpiry');
+            if (expiryEl) expiryEl.textContent = formatExpiryLine(course);
+            
+            const progress = getCourseProgress(course, 100, 100, 100);
+            const progressPercentEl = document.getElementById('courseModalProgressPercent');
+            if (progressPercentEl) progressPercentEl.textContent = `${progress}%`;
+            
+            const progressFillEl = document.getElementById('courseModalProgressFill');
+            if (progressFillEl) progressFillEl.style.width = `${progress}%`;
+
+            modal.removeAttribute('inert');
+            overlay.removeAttribute('inert');
+        }
+
+        function closeCourseDetailsModal() {
+            const modal = document.getElementById('courseModal');
+            const overlay = document.getElementById('courseModalOverlay');
+            if (modal) modal.setAttribute('inert', '');
+            if (overlay) overlay.setAttribute('inert', '');
+            currentModalCourse = null;
+        }
+
+        // Set up modal button listeners
+        function setupModalButtonListeners() {
+            const manageBtn = document.getElementById('courseModalManageBtn');
+            const deleteBtn = document.getElementById('courseModalDeleteBtn');
+
+            if (manageBtn) {
+                manageBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('🎯 Modal Manage button clicked, currentModalCourse:', currentModalCourse);
+                    if (currentModalCourse) {
+                        closeCourseDetailsModal();
+                        openCourseViewer(currentModalCourse);
+                    }
+                });
+            }
+
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('🎯 Modal Delete button clicked, currentModalCourse:', currentModalCourse);
+                    if (currentModalCourse) {
+                        closeCourseDetailsModal();
+                        deleteCourse(currentModalCourse.id);
+                    }
+                });
+            }
+        }
+
+        // Set up listeners immediately
+        setupModalButtonListeners();
 
         async function loadInstructorDashboard() {
             renderCourseSkeletons();
@@ -612,23 +973,15 @@
                 const metrics = data.metrics || {};
                 document.getElementById('totalCourses').textContent = metrics.totalCourses || 0;
                 document.getElementById('totalStudents').textContent = metrics.totalStudents || 0;
-                document.getElementById('avgEnrollment').textContent = metrics.averageEnrollment || 0;
+                document.getElementById('expiringCourses').textContent = metrics.expiringCourses || 0;
                 document.getElementById('totalWatchHours').textContent = metrics.totalWatchHours || 0;
 
                 document.getElementById('latestUpload').textContent = formatDate(metrics.latestUpload);
-                document.getElementById('zeroEnrollCount').textContent = metrics.zeroEnrollmentCourses || 0;
 
                 const topCourse = data.topCourse;
                 document.getElementById('topCourseName').textContent = topCourse
                     ? `${topCourse.title} (${topCourse.enrolled_students} students)`
                     : 'No courses yet';
-
-                const highestWatched = Array.isArray(data.topWatchedCourses) && data.topWatchedCourses.length > 0
-                    ? data.topWatchedCourses[0]
-                    : null;
-                document.getElementById('highestWatchedCourse').textContent = highestWatched
-                    ? `${highestWatched.title} (${highestWatched.totalWatchHours} hrs)`
-                    : 'No watch data';
 
                 renderTopWatchedCourses(data.topWatchedCourses || []);
                 renderCourses(data.courses || []);
@@ -672,7 +1025,11 @@
 
             try {
                 const response = await fetch(`http://localhost:3000/api/courses/${courseId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ instructor_id: instructorId })
                 });
 
                 if (!response.ok) {
@@ -734,6 +1091,62 @@
             handleCourseEditRequest();
             handleCourseVideoRequest();
         });
+
+        // Modal event listeners
+        const courseModalClose = document.getElementById('courseModalClose');
+        const courseModalOverlay = document.getElementById('courseModalOverlay');
+
+        if (courseModalClose) {
+            courseModalClose.addEventListener('click', closeCourseDetailsModal);
+        }
+
+        if (courseModalOverlay) {
+            courseModalOverlay.addEventListener('click', (e) => {
+                if (e.target === courseModalOverlay) {
+                    closeCourseDetailsModal();
+                }
+            });
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeCourseDetailsModal();
+            }
+        });
+
+        // Terminate account functionality
+        const terminateBtn = document.getElementById('terminateInstructor');
+        if (terminateBtn) {
+            terminateBtn.addEventListener('click', async () => {
+                const confirmDelete = confirm('Are you sure you want to terminate your account? All your courses and data will be permanently deleted. This cannot be undone.');
+                if (!confirmDelete) return;
+
+                const secondConfirm = confirm('This is your final warning. Your account and all associated data will be deleted permanently. Continue?');
+                if (!secondConfirm) return;
+
+                try {
+                    const response = await fetch('http://localhost:3000/api/terminate-instructor', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ instructorId, instructorEmail: localStorage.getItem('instructorEmail') })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to terminate account');
+                    }
+
+                    alert('Your account has been terminated successfully.');
+                    localStorage.removeItem('instructorId');
+                    localStorage.removeItem('instructorName');
+                    localStorage.removeItem('instructorPhoto');
+                    localStorage.removeItem('instructorEmail');
+                    window.location.href = 'index.html';
+                } catch (error) {
+                    console.error('Termination error:', error);
+                    alert('Failed to terminate account. Please try again.');
+                }
+            });
+        }
     </script>
 </body>
 </html>

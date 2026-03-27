@@ -31,6 +31,9 @@ document.getElementById('registerForm').addEventListener('submit', function (e) 
     })
     .then(data => {
       localStorage.setItem('studentEmail', email);
+      if (data && data.userId) {
+        localStorage.setItem('studentId', String(data.userId));
+      }
       localStorage.setItem(`studentName_${email}`, name);
       document.getElementById('success-message').style.display = 'block';
       setTimeout(() => {

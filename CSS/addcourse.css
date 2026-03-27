@@ -161,6 +161,63 @@ label {
   color: var(--ink);
 }
 
+.duration-fieldset {
+  border: none;
+  padding: 0;
+  margin: 14px 0 6px;
+}
+
+.duration-fieldset legend {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.duration-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.duration-selector input[type='radio'] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.duration-selector label {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #d1d5db;
+  background: var(--surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.duration-selector label span {
+  font-weight: 700;
+}
+
+.duration-selector label small {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+}
+
+.duration-selector label:hover {
+  transform: translateY(-1px);
+  border-color: rgba(14, 165, 168, 0.38);
+  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.08);
+}
+
+.duration-selector input[type='radio']:checked + label {
+  border-color: rgba(14, 165, 168, 0.85);
+  background: linear-gradient(135deg, rgba(14, 165, 168, 0.12), rgba(37, 99, 235, 0.12));
+  box-shadow: 0 18px 30px rgba(14, 165, 168, 0.12);
+}
+
 input,
 select,
 textarea {
@@ -219,5 +276,9 @@ button:hover {
 
   .form-card {
     padding: 20px;
+  }
+
+  .duration-selector {
+    grid-template-columns: 1fr;
   }
 }

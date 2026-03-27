@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Messages</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/CSS/notifications.css" />
+</head>
+<body>
+  <main class="messages-page">
+    <div class="messages-container">
+      <!-- Chat Header -->
+      <header class="chat-header">
+        <div class="header-left">
+          <a class="back-link" id="backLink" href="student_home.html">← Back</a>
+        </div>
+        <div class="header-center">
+          <h1 id="chatTitle">Messages</h1>
+        </div>
+        <div class="header-right"></div>
+      </header>
+
+      <!-- Toggle Buttons for Students/Faculty -->
+      <div class="message-type-toggle">
+        <button type="button" class="toggle-btn active" data-type="instructor" id="instructorToggle">
+          <span class="toggle-icon">👨‍🏫</span>
+          <span>Instructors</span>
+        </button>
+        <button type="button" class="toggle-btn" data-type="student" id="studentToggle">
+          <span class="toggle-icon">👨‍🎓</span>
+          <span>Students</span>
+        </button>
+      </div>
+
+      <!-- Chat Messages Area -->
+      <div class="chat-messages" id="chatMessages" aria-live="polite" aria-label="Messages">
+        <div class="messages-empty">
+          <p>No messages yet</p>
+        </div>
+      </div>
+
+      <!-- Message Input Area -->
+      <div class="message-input-area">
+        <form id="messageInputForm" class="message-form">
+          <input 
+            type="text" 
+            id="messageInput" 
+            class="message-input" 
+            placeholder="Type a message..." 
+            autocomplete="off"
+          />
+          <button type="submit" class="send-btn" aria-label="Send message">
+            <span>📤</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/notifications.js"></script>
+</body>
+</html>

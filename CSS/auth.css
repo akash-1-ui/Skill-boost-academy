@@ -181,9 +181,9 @@ select {
 .eyebrow {
   margin: 0;
   color: var(--success);
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
 }
 
@@ -195,8 +195,8 @@ select {
 }
 
 .auth-intro h1 {
-  font-size: clamp(2.2rem, 4.2vw, 3.6rem);
-  line-height: 1.05;
+  font-size: clamp(1.4rem, 2.2vw, 1.9rem);
+  line-height: 1.15;
 }
 
 .auth-intro-copy,
@@ -210,8 +210,8 @@ select {
 .auth-intro-copy {
   margin: 0;
   max-width: 34rem;
-  font-size: clamp(0.98rem, 1.3vw, 1.06rem);
-  line-height: 1.8;
+  font-size: clamp(0.88rem, 0.96vw, 0.95rem);
+  line-height: 1.65;
 }
 
 .auth-feature-grid {
@@ -233,14 +233,14 @@ select {
 .auth-signal strong {
   display: block;
   margin-bottom: 0.35rem;
-  font-size: 1rem;
+  font-size: 0.96rem;
 }
 
 .auth-feature-card p,
 .auth-signal p {
   margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.65;
+  font-size: 0.88rem;
+  line-height: 1.6;
 }
 
 .auth-signal {
@@ -290,14 +290,14 @@ select {
 }
 
 .auth-header h2 {
-  font-size: clamp(1.8rem, 2.4vw, 2.2rem);
-  line-height: 1.1;
+  font-size: clamp(1.22rem, 1.6vw, 1.5rem);
+  line-height: 1.2;
 }
 
 .subtext {
   margin: 0.6rem 0 0;
-  font-size: 0.96rem;
-  line-height: 1.7;
+  font-size: 0.92rem;
+  line-height: 1.6;
 }
 
 .form-group {
@@ -398,7 +398,7 @@ select {
 .switch-link,
 .register-link,
 .switch-role {
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   line-height: 1.6;
 }
 

@@ -1,0 +1,101 @@
+/* Message History Styles */
+.message-history {
+  padding: var(--section-pad);
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+
+.message-history h3 {
+  font-size: clamp(1rem, 1.5vw, 1.2rem);
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.messages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.no-messages {
+  text-align: center;
+  color: var(--muted);
+  padding: 2rem 1rem;
+  font-style: italic;
+}
+
+.message-item {
+  padding: var(--card-pad);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 4px solid var(--accent);
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.message-header h4 {
+  font-size: clamp(0.9rem, 1.2vw, 1rem);
+  color: var(--text);
+  margin: 0;
+}
+
+.message-priority {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.message-priority.priority-normal {
+  background: rgba(103, 232, 249, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(103, 232, 249, 0.24);
+}
+
+.message-priority.priority-important {
+  background: rgba(251, 146, 60, 0.12);
+  color: #fed7aa;
+  border: 1px solid rgba(251, 146, 60, 0.24);
+}
+
+.message-priority.priority-urgent {
+  background: rgba(251, 113, 133, 0.12);
+  color: #fbcfe8;
+  border: 1px solid rgba(251, 113, 133, 0.24);
+}
+
+.message-item p {
+  color: var(--muted-strong);
+  font-size: clamp(0.85rem, 1vw, 0.95rem);
+  line-height: 1.6;
+  margin: 0.75rem 0;
+}
+
+.message-time {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+
+.form-status {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.85rem;
+  text-align: center;
+}
