@@ -35,6 +35,12 @@ document.getElementById('registerForm').addEventListener('submit', function (e) 
         localStorage.setItem('studentId', String(data.userId));
       }
       localStorage.setItem(`studentName_${email}`, name);
+      localStorage.setItem('user', JSON.stringify({
+        id: String(data?.userId || ''),
+        role: 'student',
+        username: name || email,
+        email
+      }));
       document.getElementById('success-message').style.display = 'block';
       setTimeout(() => {
         window.location.href = 'student_home.html';

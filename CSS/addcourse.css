@@ -263,6 +263,32 @@ button:hover {
   box-shadow: 0 16px 30px rgba(37, 99, 235, 0.24);
 }
 
+.form-status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.form-status.is-info {
+  background: rgba(14, 165, 168, 0.12);
+  color: #0f766e;
+  border: 1px solid rgba(15, 118, 110, 0.2);
+}
+
+.form-status.is-success {
+  background: rgba(22, 163, 74, 0.12);
+  color: #166534;
+  border: 1px solid rgba(22, 101, 52, 0.2);
+}
+
+.form-status.is-error {
+  background: rgba(220, 38, 38, 0.12);
+  color: #991b1b;
+  border: 1px solid rgba(153, 27, 27, 0.2);
+}
+
 @media (max-width: 900px) {
   .form-grid {
     grid-template-columns: 1fr;

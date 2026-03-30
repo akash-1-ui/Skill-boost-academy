@@ -27,8 +27,16 @@ const promisePool = pool.promise();
 async function ensureColumnExists(tableName, columnName, definitionSql) {
     const [columns] = await promisePool.query(`SHOW COLUMNS FROM ${tableName} LIKE ?`, [columnName]);
     if (columns.length === 0) {
-        await promisePool.query(`ALTER TABLE ${tableName} ADD COLUMN ${definitionSql}`);
-        console.log(`Added ${columnName} column to ${tableName}`);
+        try {
+            await promisePool.query(`ALTER TABLE ${tableName} ADD COLUMN ${definitionSql}`);
+            console.log(`Added ${columnName} column to ${tableName}`);
+        } catch (error) {
+            if (error?.code === 'ER_DUP_FIELDNAME') {
+                console.log(`${columnName} column already exists in ${tableName}`);
+                return;
+            }
+            throw error;
+        }
     }
 }
 
@@ -56,6 +64,31 @@ async function initializeDatabase() {
         await ensureColumnExists('users', 'profile_photo', 'profile_photo LONGTEXT AFTER branch');
 
         console.log(`Users table verified/created in database "${databaseName}"`);
+
+        // Create group messages table
+        await promisePool.query(`
+            CREATE TABLE IF NOT EXISTS group_messages (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                sender_id INT NOT NULL,
+                sender_name VARCHAR(255) NOT NULL,
+                role ENUM('student', 'instructor') NOT NULL,
+                group_type ENUM('students', 'instructors') NOT NULL,
+                message_category VARCHAR(50) NOT NULL DEFAULT 'instructor_message',
+                message TEXT NOT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_group_type (group_type),
+                INDEX idx_timestamp (timestamp)
+            )
+        `);
+
+        await ensureColumnExists(
+            'group_messages',
+            'message_category',
+            `message_category VARCHAR(50) NOT NULL DEFAULT 'instructor_message' AFTER group_type`
+        );
+
+        console.log(`Group messages table verified/created in database "${databaseName}"`);
     } catch (error) {
         console.error('Database initialization error:', error);
         throw error;

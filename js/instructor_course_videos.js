@@ -183,6 +183,19 @@ async function loadCourseDetails() {
     if (courseDescriptionEl) {
       courseDescriptionEl.textContent = course.description || 'No description provided yet.';
     }
+
+    // Set course cover as background on body
+    if (course.cover_path || course.cover) {
+      const coverUrl = resolveAssetPath(course.cover_path || course.cover, '/uploads/covers');
+      if (coverUrl) {
+        document.body.style.backgroundImage = `url('${coverUrl}')`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        document.body.style.backgroundAttachment = 'fixed';
+        document.body.style.backgroundRepeat = 'no-repeat';
+      }
+    }
+
     return true;
   } catch (error) {
     if (courseTitleEl) {

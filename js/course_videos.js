@@ -17,6 +17,7 @@ if (studentNamePill) {
 
 const courseTitleEl = document.getElementById('courseTitle');
 const courseDescriptionEl = document.getElementById('courseDescription');
+const courseInstructorEl = document.getElementById('courseInstructor');
 const lessonCountEl = document.getElementById('lessonCount');
 const videoListEl = document.getElementById('videoList');
 const player = document.getElementById('coursePlayer');
@@ -75,6 +76,14 @@ async function loadCourseDetails() {
     }
     if (courseDescriptionEl) {
       courseDescriptionEl.textContent = course.description || 'No description provided yet.';
+    }
+    if (courseInstructorEl && course.instructor_name) {
+      courseInstructorEl.textContent = `By ${course.instructor_name}`;
+      courseInstructorEl.style.display = 'block';
+    }
+    if (course.cover_path || course.cover) {
+      const coverPath = resolveAssetPath(course.cover_path || course.cover, '/uploads/covers');
+      document.body.style.backgroundImage = `url('${coverPath}')`;
     }
   } catch (error) {
     if (courseTitleEl) {

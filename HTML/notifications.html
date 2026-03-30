@@ -3,63 +3,77 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Messages</title>
+  <title>Notifications</title>
+  <script>
+    (() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const role = params.get('role') === 'instructor' ? 'instructor' : 'student';
+        const theme = localStorage.getItem(`skillboost-theme-${role}`) === 'light' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.setAttribute('data-theme-role', role);
+      } catch (error) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/CSS/notifications.css" />
+  <link rel="stylesheet" href="/CSS/notifications.css?v=20260331-theme-toggle" />
 </head>
 <body>
   <main class="messages-page">
-    <div class="messages-container">
-      <!-- Chat Header -->
+    <aside class="conversations-panel">
+      <div class="panel-tabs">
+        <button type="button" class="tab-button active" id="studentsTabBtn">Students</button>
+        <button type="button" class="tab-button" id="instructorsTabBtn">Instructors</button>
+      </div>
+
+      <div class="conversations-list" id="conversationList" aria-live="polite">
+        <div style="padding: 20px; text-align: center; color: #999;">Loading...</div>
+      </div>
+    </aside>
+
+    <!-- RIGHT PANEL - Chat -->
+    <section class="chat-panel">
       <header class="chat-header">
-        <div class="header-left">
-          <a class="back-link" id="backLink" href="student_home.html">← Back</a>
+        <button type="button" class="back-link-button" id="backLink">&#8592; Back</button>
+        <div class="chat-header-copy">
+          <h2 id="conversationTitle">Select a group</h2>
+          <p class="chat-header-subtitle" id="conversationMeta">Start chatting with the group</p>
         </div>
-        <div class="header-center">
-          <h1 id="chatTitle">Messages</h1>
-        </div>
-        <div class="header-right"></div>
+        <button type="button" class="theme-toggle theme-toggle-notifications" id="notificationsThemeToggle" data-theme-toggle>
+          <span class="theme-toggle-track" aria-hidden="true">
+            <span class="theme-toggle-thumb"></span>
+          </span>
+          <span class="theme-toggle-text" data-theme-label>Dark Mode</span>
+        </button>
       </header>
 
-      <!-- Toggle Buttons for Students/Faculty -->
-      <div class="message-type-toggle">
-        <button type="button" class="toggle-btn active" data-type="instructor" id="instructorToggle">
-          <span class="toggle-icon">👨‍🏫</span>
-          <span>Instructors</span>
-        </button>
-        <button type="button" class="toggle-btn" data-type="student" id="studentToggle">
-          <span class="toggle-icon">👨‍🎓</span>
-          <span>Students</span>
-        </button>
-      </div>
-
-      <!-- Chat Messages Area -->
-      <div class="chat-messages" id="chatMessages" aria-live="polite" aria-label="Messages">
-        <div class="messages-empty">
-          <p>No messages yet</p>
+      <div class="chat-messages" id="chatMessages" aria-live="polite">
+        <div class="empty-state">
+          <div class="empty-state-text">Select a group to start messaging</div>
         </div>
       </div>
 
-      <!-- Message Input Area -->
-      <div class="message-input-area">
-        <form id="messageInputForm" class="message-form">
-          <input 
-            type="text" 
-            id="messageInput" 
-            class="message-input" 
-            placeholder="Type a message..." 
+      <div class="chat-input-area">
+        <form id="messageInputForm" class="message-input-form">
+          <input
+            type="text"
+            id="messageInput"
+            class="message-input"
+            placeholder="Type a message..."
             autocomplete="off"
+            disabled
           />
-          <button type="submit" class="send-btn" aria-label="Send message">
-            <span>📤</span>
-          </button>
+          <button type="submit" class="send-btn" id="sendMessageBtn" disabled aria-label="Send message">&#10148;</button>
         </form>
       </div>
-    </div>
+    </section>
   </main>
 
-  <script src="/js/notifications.js"></script>
+  <script src="/js/theme_mode.js?v=20260331-theme-toggle"></script>
+  <script src="/js/notifications.js?v=20260331-theme-toggle"></script>
 </body>
 </html>

@@ -18,7 +18,8 @@ const {
 const {
     getCloudinaryStatus,
     uploadVideoAsset,
-    deleteVideoAssetByUrl
+    deleteVideoAssetByUrl,
+    extractCloudinaryPublicId
 } = require('./cloudinary');
 
 let cron = null;
@@ -34,6 +35,7 @@ const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
 const RESET_OTP_EXPIRY_MINUTES = Number(process.env.RESET_OTP_EXPIRY_MINUTES || 10);
 const RESET_OTP_RESEND_SECONDS = Number(process.env.RESET_OTP_RESEND_SECONDS || 60);
 const RESET_OTP_MAX_ATTEMPTS = Number(process.env.RESET_OTP_MAX_ATTEMPTS || 5);
+const LOCAL_VIDEO_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
@@ -117,6 +119,36 @@ function asPositiveInt(value) {
         return null;
     }
     return n;
+}
+
+function hasMeaningfulDisplayName(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return Boolean(
+        normalized &&
+        !['anonymous', 'anonimous', 'user', 'student', 'instructor'].includes(normalized)
+    );
+}
+
+function resolvePreferredDisplayName(candidates, fallback) {
+    for (const candidate of candidates) {
+        const trimmed = String(candidate || '').trim();
+        if (hasMeaningfulDisplayName(trimmed)) {
+            return trimmed;
+        }
+    }
+
+    return String(fallback || '').trim();
+}
+
+function normalizeGroupMessageCategory(value, messageText = '') {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'new_release' || normalized === 'instructor_message') {
+        return normalized;
+    }
+
+    return String(messageText || '').trim().startsWith('NEW RELEASE:')
+        ? 'new_release'
+        : 'instructor_message';
 }
 
 function sanitizePhoneNumber(value) {
@@ -216,10 +248,15 @@ function normalizeCourse(course) {
     const durationLabel = course.duration_label || durationOption.planLabel;
     const expiryDate = course.expiry_date || calculateExpiryDate(course.created_at, durationDays);
     const status = getCourseLifecycleStatus(expiryDate);
+    const instructorName = resolvePreferredDisplayName(
+        [course.instructor_name, course.username],
+        'Instructor'
+    );
 
     return {
         id: course.id,
         instructor_id: course.instructor_id,
+        instructor_name: instructorName,
         title: course.title,
         duration: `${durationDays} days`,
         duration_days: durationDays,
@@ -256,6 +293,294 @@ async function createNotifications(userIds, message, type) {
     return uniqueUserIds.length;
 }
 
+async function getUserById(userId) {
+    const normalizedUserId = asPositiveInt(userId);
+    if (!normalizedUserId) {
+        return null;
+    }
+
+    const [rows] = await db.query(
+        `SELECT id, username, email, role, profile_photo
+         FROM users
+         WHERE id = ?
+         LIMIT 1`,
+        [normalizedUserId]
+    );
+
+    return rows[0] || null;
+}
+
+async function getSharedActiveCourses(studentUserId, instructorUserId) {
+    const normalizedStudentId = asPositiveInt(studentUserId);
+    const normalizedInstructorId = asPositiveInt(instructorUserId);
+
+    if (!normalizedStudentId || !normalizedInstructorId) {
+        return [];
+    }
+
+    const [rows] = await db.query(
+        `SELECT
+            c.id,
+            c.title,
+            c.created_at
+         FROM courses c
+         INNER JOIN users s
+           ON s.id = ?
+          AND s.role = 'student'
+         INNER JOIN enrollments e
+           ON e.student_email = s.email
+          AND e.course_id = c.id
+         WHERE c.instructor_id = ?
+           AND (c.expiry_date IS NULL OR c.expiry_date > NOW())
+         ORDER BY c.created_at DESC, c.id DESC`,
+        [normalizedStudentId, normalizedInstructorId]
+    );
+
+    return rows.map((row) => ({
+        id: Number(row.id),
+        title: row.title,
+        created_at: row.created_at
+    }));
+}
+
+async function getChatParticipants(userId, otherUserId) {
+    const normalizedUserId = asPositiveInt(userId);
+    const normalizedOtherUserId = asPositiveInt(otherUserId);
+
+    if (!normalizedUserId || !normalizedOtherUserId || normalizedUserId === normalizedOtherUserId) {
+        return null;
+    }
+
+    const [rows] = await db.query(
+        `SELECT id, username, email, role, profile_photo
+         FROM users
+         WHERE id IN (?, ?)`,
+        [normalizedUserId, normalizedOtherUserId]
+    );
+
+    if (rows.length !== 2) {
+        return null;
+    }
+
+    const currentUser = rows.find((row) => Number(row.id) === normalizedUserId);
+    const otherUser = rows.find((row) => Number(row.id) === normalizedOtherUserId);
+
+    if (!currentUser || !otherUser) {
+        return null;
+    }
+
+    if (currentUser.role === 'instructor' && otherUser.role === 'instructor') {
+        return {
+            currentUser,
+            otherUser,
+            studentUser: null,
+            instructorUser: currentUser,
+            sharedCourses: [],
+            primaryCourse: null,
+            conversationType: 'instructor'
+        };
+    }
+
+    if (currentUser.role === otherUser.role) {
+        return null;
+    }
+
+    const studentUser = currentUser.role === 'student' ? currentUser : otherUser;
+    const instructorUser = currentUser.role === 'instructor' ? currentUser : otherUser;
+    const sharedCourses = await getSharedActiveCourses(studentUser.id, instructorUser.id);
+
+    if (sharedCourses.length === 0) {
+        return null;
+    }
+
+    return {
+        currentUser,
+        otherUser,
+        studentUser,
+        instructorUser,
+        sharedCourses,
+        primaryCourse: sharedCourses[0] || null,
+        conversationType: 'student'
+    };
+}
+
+function summarizeSharedCourses(sharedCourses) {
+    const uniqueTitles = Array.from(
+        new Set((sharedCourses || []).map((course) => String(course.title || '').trim()).filter(Boolean))
+    );
+
+    if (uniqueTitles.length === 0) {
+        return 'No shared active courses';
+    }
+
+    if (uniqueTitles.length === 1) {
+        return uniqueTitles[0];
+    }
+
+    if (uniqueTitles.length === 2) {
+        return `${uniqueTitles[0]} and ${uniqueTitles[1]}`;
+    }
+
+    return `${uniqueTitles[0]} + ${uniqueTitles.length - 1} more courses`;
+}
+
+async function fetchChatConversationsForUser(userId) {
+    const currentUser = await getUserById(userId);
+    if (!currentUser) {
+        return [];
+    }
+
+    let relationRows = [];
+
+    if (currentUser.role === 'student') {
+        const [rows] = await db.query(
+            `SELECT
+                u.id AS partner_id,
+                u.username AS partner_name,
+                u.profile_photo AS partner_photo,
+                c.id AS course_id,
+                c.title AS course_title,
+                c.created_at AS course_created_at
+             FROM users me
+             INNER JOIN enrollments e ON e.student_email = me.email
+             INNER JOIN courses c
+               ON c.id = e.course_id
+              AND (c.expiry_date IS NULL OR c.expiry_date > NOW())
+             INNER JOIN users u
+               ON u.id = c.instructor_id
+              AND u.role = 'instructor'
+             WHERE me.id = ?
+               AND me.role = 'student'
+             ORDER BY c.created_at DESC, c.id DESC`,
+            [currentUser.id]
+        );
+        relationRows = rows;
+    } else if (currentUser.role === 'instructor') {
+        const [rows] = await db.query(
+            `SELECT
+                u.id AS partner_id,
+                u.username AS partner_name,
+                u.profile_photo AS partner_photo,
+                c.id AS course_id,
+                c.title AS course_title,
+                c.created_at AS course_created_at
+             FROM courses c
+             INNER JOIN enrollments e ON e.course_id = c.id
+             INNER JOIN users u
+               ON u.email = e.student_email
+              AND u.role = 'student'
+             WHERE c.instructor_id = ?
+               AND (c.expiry_date IS NULL OR c.expiry_date > NOW())
+             ORDER BY c.created_at DESC, c.id DESC`,
+            [currentUser.id]
+        );
+        relationRows = rows;
+
+        const [instructorPeerRows] = await db.query(
+            `SELECT
+                u.id AS partner_id,
+                u.username AS partner_name,
+                u.profile_photo AS partner_photo,
+                NULL AS course_id,
+                NULL AS course_title,
+                u.created_at AS course_created_at
+             FROM users u
+             WHERE u.role = 'instructor'
+               AND u.id <> ?
+             ORDER BY u.username ASC, u.id ASC`,
+            [currentUser.id]
+        );
+
+        relationRows = [...relationRows, ...instructorPeerRows];
+    }
+
+    if (relationRows.length === 0) {
+        return [];
+    }
+
+    const conversationMap = new Map();
+
+    relationRows.forEach((row) => {
+        const partnerId = Number(row.partner_id);
+        if (!partnerId) {
+            return;
+        }
+
+        if (!conversationMap.has(partnerId)) {
+            conversationMap.set(partnerId, {
+                partner_id: partnerId,
+                partner_name: row.partner_name || 'User',
+                partner_photo: row.partner_photo || DEFAULT_PROFILE_PHOTO,
+                partner_role: currentUser.role === 'student'
+                    ? 'instructor'
+                    : (row.course_id ? 'student' : 'instructor'),
+                shared_courses: [],
+                shared_course_count: 0,
+                shared_course_summary: '',
+                last_message: '',
+                last_message_at: null,
+                last_sender_id: null,
+                unread_count: 0,
+                relationship_updated_at: row.course_created_at || null
+            });
+        }
+
+        const conversation = conversationMap.get(partnerId);
+        const alreadyAddedCourse = conversation.shared_courses.some((course) => Number(course.id) === Number(row.course_id));
+        if (row.course_id && !alreadyAddedCourse) {
+            conversation.shared_courses.push({
+                id: Number(row.course_id),
+                title: row.course_title,
+                created_at: row.course_created_at
+            });
+        }
+    });
+
+    const [messageRows] = await db.query(
+        `SELECT id, sender_id, recipient_id, message, is_read, created_at
+         FROM chat_messages
+         WHERE sender_id = ? OR recipient_id = ?
+         ORDER BY created_at DESC, id DESC`,
+        [currentUser.id, currentUser.id]
+    );
+
+    messageRows.forEach((messageRow) => {
+        const partnerId = Number(messageRow.sender_id) === Number(currentUser.id)
+            ? Number(messageRow.recipient_id)
+            : Number(messageRow.sender_id);
+
+        const conversation = conversationMap.get(partnerId);
+        if (!conversation) {
+            return;
+        }
+
+        if (!conversation.last_message_at) {
+            conversation.last_message = messageRow.message || '';
+            conversation.last_message_at = messageRow.created_at;
+            conversation.last_sender_id = Number(messageRow.sender_id);
+        }
+
+        if (Number(messageRow.recipient_id) === Number(currentUser.id) && !Number(messageRow.is_read)) {
+            conversation.unread_count += 1;
+        }
+    });
+
+    return Array.from(conversationMap.values())
+        .map((conversation) => {
+            conversation.shared_course_count = conversation.shared_courses.length;
+            conversation.shared_course_summary = summarizeSharedCourses(conversation.shared_courses);
+            return conversation;
+        })
+        .sort((left, right) => {
+            const leftTime = new Date(left.last_message_at || left.relationship_updated_at || 0).getTime();
+            const rightTime = new Date(right.last_message_at || right.relationship_updated_at || 0).getTime();
+            if (leftTime !== rightTime) {
+                return rightTime - leftTime;
+            }
+            return String(left.partner_name || '').localeCompare(String(right.partner_name || ''));
+        });
+}
+
 async function getStudentUserIdsForCourse(courseId) {
     const [rows] = await db.query(
         `SELECT DISTINCT u.id
@@ -266,6 +591,37 @@ async function getStudentUserIdsForCourse(courseId) {
     );
 
     return rows.map((row) => Number(row.id)).filter(Boolean);
+}
+
+function normalizeInlineText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function truncateText(value, maxLength) {
+    const text = normalizeInlineText(value);
+    if (!text || text.length <= maxLength) {
+        return text;
+    }
+
+    const shortened = text.slice(0, Math.max(0, maxLength - 3));
+    const boundary = shortened.lastIndexOf(' ');
+    const finalText = boundary > 40 ? shortened.slice(0, boundary) : shortened;
+    return `${finalText.trim()}...`;
+}
+
+function buildCourseReleaseMessage(course, instructorName) {
+    const title = normalizeInlineText(course?.title) || 'Untitled course';
+    const category = normalizeInlineText(course?.category) || 'General learning';
+    const description = truncateText(course?.description, 120);
+    const durationLabel = normalizeInlineText(course?.durationLabel);
+    const durationPlan = normalizeInlineText(course?.durationPlan);
+    const durationText = [durationLabel, durationPlan].filter(Boolean).join(' / ');
+    const compactSummary = description
+        ? `${description.charAt(0).toUpperCase()}${description.slice(1)}${/[.!?]$/.test(description) ? '' : '.'}`
+        : `A guided ${category.toLowerCase()} course built for steady learning progress.`;
+    const durationNote = durationText ? ` Format: ${durationText}.` : '';
+
+    return `NEW RELEASE: "${title}" by ${instructorName} in ${category}.${durationNote} AI note: ${compactSummary}`;
 }
 
 async function sendNewCourseNotifications(courseTitle) {
@@ -280,6 +636,36 @@ async function sendNewCourseNotifications(courseTitle) {
         `New course added: ${courseTitle}`,
         'new_course'
     );
+}
+
+async function sendNewCourseReleaseAnnouncement(course) {
+    if (!course?.instructorId || !course?.title) {
+        return 0;
+    }
+
+    const [rows] = await db.query(
+        `SELECT username
+         FROM users
+         WHERE id = ? AND role = 'instructor'
+         LIMIT 1`,
+        [course.instructorId]
+    );
+
+    const instructorName = resolvePreferredDisplayName(
+        [rows[0]?.username],
+        'Instructor'
+    );
+
+    const message = buildCourseReleaseMessage(course, instructorName);
+    const timestamp = new Date();
+
+    await db.query(
+        `INSERT INTO group_messages (sender_id, sender_name, role, group_type, message_category, message, timestamp)
+         VALUES (?, ?, 'instructor', 'students', 'new_release', ?, ?)`,
+        [course.instructorId, instructorName, message, timestamp]
+    );
+
+    return 1;
 }
 
 async function sendExpiryWarningNotifications(course) {
@@ -304,8 +690,16 @@ async function sendExpiryDeletionNotification(instructorId, courseTitle) {
 async function ensureColumnExists(tableName, columnName, definitionSql) {
     const [columns] = await db.query(`SHOW COLUMNS FROM ${tableName} LIKE ?`, [columnName]);
     if (columns.length === 0) {
-        await db.query(`ALTER TABLE ${tableName} ADD COLUMN ${definitionSql}`);
-        console.log(`Added ${columnName} column to ${tableName}`);
+        try {
+            await db.query(`ALTER TABLE ${tableName} ADD COLUMN ${definitionSql}`);
+            console.log(`Added ${columnName} column to ${tableName}`);
+        } catch (error) {
+            if (error?.code === 'ER_DUP_FIELDNAME') {
+                console.log(`${columnName} column already exists in ${tableName}`);
+                return;
+            }
+            throw error;
+        }
     }
 }
 
@@ -331,6 +725,40 @@ async function dropColumnIfExists(tableName, columnName) {
 }
 
 async function initializeTables() {
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS group_messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            sender_id INT NOT NULL,
+            sender_name VARCHAR(255) NOT NULL,
+            role ENUM('student', 'instructor') NOT NULL,
+            group_type ENUM('students', 'instructors') NOT NULL,
+            message_category VARCHAR(50) NOT NULL DEFAULT 'instructor_message',
+            message TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+            INDEX idx_group_type (group_type),
+            INDEX idx_group_type_category (group_type, message_category),
+            INDEX idx_timestamp (timestamp)
+        )
+    `);
+
+    await ensureColumnExists(
+        'group_messages',
+        'message_category',
+        `message_category VARCHAR(50) NOT NULL DEFAULT 'instructor_message' AFTER group_type`
+    );
+
+    await db.query(`
+        UPDATE group_messages
+        SET message_category = CASE
+            WHEN message LIKE 'NEW RELEASE:%' THEN 'new_release'
+            ELSE 'instructor_message'
+        END
+        WHERE message_category IS NULL
+           OR message_category = ''
+           OR message LIKE 'NEW RELEASE:%'
+    `);
+
     await db.query(`
         CREATE TABLE IF NOT EXISTS courses (
             id INT PRIMARY KEY AUTO_INCREMENT,
@@ -504,6 +932,25 @@ async function initializeTables() {
     `);
 
     await db.query(`
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            sender_id INT NOT NULL,
+            recipient_id INT NOT NULL,
+            course_id INT NULL,
+            message TEXT NOT NULL,
+            is_read TINYINT(1) DEFAULT 0,
+            read_at DATETIME NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_chat_sender_created (sender_id, created_at),
+            INDEX idx_chat_recipient_read (recipient_id, is_read, created_at),
+            INDEX idx_chat_pair (sender_id, recipient_id, created_at),
+            FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL
+        )
+    `);
+
+    await db.query(`
         CREATE TABLE IF NOT EXISTS contacts (
             id INT PRIMARY KEY AUTO_INCREMENT,
             name VARCHAR(255) NOT NULL,
@@ -539,6 +986,13 @@ initializeTables()
         } catch (error) {
             console.error('Initial course lifecycle sweep failed:', error);
         }
+
+        try {
+            const result = await migrateExistingVideosToCloudinary();
+            console.log(`Existing video Cloudinary migration complete. migrated=${result.migratedCount}, skipped=${result.skippedCount}, failed=${result.failedCount}`);
+        } catch (error) {
+            console.error('Existing video Cloudinary migration failed:', error);
+        }
     })
     .catch((err) => {
         console.error('Error initializing application tables:', err);
@@ -566,17 +1020,298 @@ async function deleteStoredFile(publicPath) {
     }
 }
 
+function isPathWithinProject(targetPath) {
+    if (!targetPath) {
+        return false;
+    }
+
+    const resolvedTarget = path.resolve(targetPath);
+    const allowedRoots = [
+        path.resolve(__dirname),
+        path.resolve(__dirname, '..')
+    ];
+
+    return allowedRoots.some((rootPath) => resolvedTarget === rootPath || resolvedTarget.startsWith(`${rootPath}${path.sep}`));
+}
+
+async function deleteAbsoluteFile(targetPath) {
+    if (!targetPath || !isPathWithinProject(targetPath)) {
+        return;
+    }
+
+    try {
+        await fs.promises.unlink(targetPath);
+    } catch (error) {
+        if (error.code !== 'ENOENT') {
+            console.error('Error deleting file:', targetPath, error);
+        }
+    }
+}
+
+function normalizeLocalVideoReference(videoUrl) {
+    if (!videoUrl || typeof videoUrl !== 'string') {
+        return '';
+    }
+
+    const trimmed = videoUrl.trim();
+    if (!trimmed) {
+        return '';
+    }
+
+    if (/^https?:\/\//i.test(trimmed)) {
+        try {
+            const parsedUrl = new URL(trimmed);
+            if (!LOCAL_VIDEO_HOSTS.has(String(parsedUrl.hostname || '').toLowerCase())) {
+                return '';
+            }
+            return decodeURIComponent(parsedUrl.pathname || '').split(/[?#]/)[0];
+        } catch (error) {
+            return '';
+        }
+    }
+
+    return trimmed.split(/[?#]/)[0];
+}
+
+function buildVideoFileCandidates(videoUrl) {
+    const normalizedReference = normalizeLocalVideoReference(videoUrl);
+    if (!normalizedReference) {
+        return [];
+    }
+
+    const normalizedPath = normalizedReference.replace(/\\/g, '/');
+    const relativePath = normalizedPath.replace(/^\/+/, '');
+    const fileName = path.basename(normalizedPath);
+    const candidates = [];
+
+    const pushCandidate = (candidatePath) => {
+        if (!candidatePath) {
+            return;
+        }
+
+        const resolvedCandidate = path.resolve(candidatePath);
+        if (isPathWithinProject(resolvedCandidate)) {
+            candidates.push(resolvedCandidate);
+        }
+    };
+
+    if (path.isAbsolute(normalizedPath)) {
+        pushCandidate(normalizedPath);
+    }
+
+    if (relativePath) {
+        pushCandidate(path.join(__dirname, relativePath));
+        pushCandidate(path.join(__dirname, '..', relativePath));
+    }
+
+    if (fileName) {
+        pushCandidate(path.join(__dirname, 'videos', fileName));
+        pushCandidate(path.join(__dirname, 'tmp', 'videos', fileName));
+        pushCandidate(path.join(__dirname, '..', 'videos', fileName));
+    }
+
+    return Array.from(new Set(candidates));
+}
+
+function resolveExistingVideoFile(videoUrl) {
+    const candidatePaths = buildVideoFileCandidates(videoUrl);
+    for (const candidatePath of candidatePaths) {
+        try {
+            const stats = fs.statSync(candidatePath);
+            if (stats.isFile()) {
+                return candidatePath;
+            }
+        } catch (error) {
+            continue;
+        }
+    }
+
+    return null;
+}
+
 async function deleteVideoStorageAsset(videoUrl) {
     if (!videoUrl || typeof videoUrl !== 'string') {
         return;
     }
 
-    if (/^https?:\/\//i.test(videoUrl)) {
+    if (extractCloudinaryPublicId(videoUrl)) {
         await deleteVideoAssetByUrl(videoUrl);
         return;
     }
 
-    await deleteStoredFile(videoUrl);
+    const resolvedFile = resolveExistingVideoFile(videoUrl);
+    if (resolvedFile) {
+        await deleteAbsoluteFile(resolvedFile);
+        return;
+    }
+
+    if (!/^https?:\/\//i.test(videoUrl)) {
+        await deleteStoredFile(videoUrl);
+    }
+}
+
+async function updateMigratedVideoReferences(record, uploadedUrl) {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        if (record.videoId) {
+            await connection.query(
+                'UPDATE videos SET video_url = ? WHERE id = ?',
+                [uploadedUrl, record.videoId]
+            );
+            await connection.query(
+                'UPDATE course_videos SET video_path = ? WHERE id = ?',
+                [uploadedUrl, record.videoId]
+            );
+        } else if (record.courseId) {
+            await connection.query(
+                'UPDATE videos SET video_url = ? WHERE course_id = ? AND video_url = ?',
+                [uploadedUrl, record.courseId, record.sourcePath]
+            );
+            await connection.query(
+                'UPDATE course_videos SET video_path = ? WHERE course_id = ? AND video_path = ?',
+                [uploadedUrl, record.courseId, record.sourcePath]
+            );
+        }
+
+        if (record.courseId) {
+            await connection.query(
+                'UPDATE courses SET video_path = ? WHERE id = ? AND video_path = ?',
+                [uploadedUrl, record.courseId, record.sourcePath]
+            );
+        }
+
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+}
+
+async function getVideoMigrationCandidates() {
+    const [courseRows] = await db.query(
+        `SELECT id AS course_id, video_path AS source_path
+         FROM courses
+         WHERE video_path IS NOT NULL
+           AND video_path <> ''
+           AND (expiry_date IS NULL OR expiry_date > NOW())`
+    );
+
+    const [videoRows] = await db.query(
+        `SELECT v.id AS video_id, v.course_id, v.video_url AS source_path
+         FROM videos v
+         INNER JOIN courses c ON c.id = v.course_id
+         WHERE v.video_url IS NOT NULL
+           AND v.video_url <> ''
+           AND (c.expiry_date IS NULL OR c.expiry_date > NOW())`
+    );
+
+    return [
+        ...courseRows.map((row) => ({
+            courseId: Number(row.course_id),
+            videoId: null,
+            sourcePath: row.source_path
+        })),
+        ...videoRows.map((row) => ({
+            courseId: Number(row.course_id),
+            videoId: Number(row.video_id),
+            sourcePath: row.source_path
+        }))
+    ];
+}
+
+async function migrateExistingVideosToCloudinary() {
+    const status = getCloudinaryStatus();
+    if (!status.ready) {
+        console.log(`Skipping existing video Cloudinary migration: ${status.reason}`);
+        return { migratedCount: 0, skippedCount: 0, failedCount: 0 };
+    }
+
+    const candidates = await getVideoMigrationCandidates();
+    const groupedCandidates = new Map();
+    let skippedCount = 0;
+    let migratedCount = 0;
+    let failedCount = 0;
+
+    for (const candidate of candidates) {
+        const sourcePath = String(candidate.sourcePath || '').trim();
+        if (!sourcePath || extractCloudinaryPublicId(sourcePath)) {
+            skippedCount += 1;
+            continue;
+        }
+
+        const resolvedFile = resolveExistingVideoFile(sourcePath);
+        if (!resolvedFile) {
+            skippedCount += 1;
+            console.warn(`Skipping existing video migration for missing or remote source: ${sourcePath}`);
+            continue;
+        }
+
+        const groupKey = resolvedFile.toLowerCase();
+        if (!groupedCandidates.has(groupKey)) {
+            groupedCandidates.set(groupKey, {
+                resolvedFile,
+                records: []
+            });
+        }
+
+        groupedCandidates.get(groupKey).records.push({
+            ...candidate,
+            sourcePath
+        });
+    }
+
+    for (const group of groupedCandidates.values()) {
+        let uploadedUrl = '';
+
+        try {
+            const uploadedVideo = await uploadVideoAsset(group.resolvedFile, { removeLocalFile: false });
+            uploadedUrl = uploadedVideo.secure_url || uploadedVideo.url;
+        } catch (error) {
+            failedCount += group.records.length;
+            console.error(`Failed to upload existing video to Cloudinary: ${group.resolvedFile}`, error);
+            continue;
+        }
+
+        let successfulUpdates = 0;
+        let groupFailed = false;
+
+        for (const record of group.records) {
+            try {
+                await updateMigratedVideoReferences(record, uploadedUrl);
+                successfulUpdates += 1;
+                migratedCount += 1;
+            } catch (error) {
+                groupFailed = true;
+                failedCount += 1;
+                console.error(
+                    `Failed to update migrated video reference for course=${record.courseId || 'n/a'} video=${record.videoId || 'n/a'}`,
+                    error
+                );
+            }
+        }
+
+        if (successfulUpdates === 0) {
+            try {
+                await deleteVideoAssetByUrl(uploadedUrl);
+            } catch (deleteError) {
+                console.error(`Failed to remove unused Cloudinary asset after migration failure: ${uploadedUrl}`, deleteError);
+            }
+            continue;
+        }
+
+        if (!groupFailed) {
+            await deleteAbsoluteFile(group.resolvedFile);
+        } else {
+            console.warn(`Kept local video file after partial migration so failed rows can be retried: ${group.resolvedFile}`);
+        }
+    }
+
+    return { migratedCount, skippedCount, failedCount };
 }
 
 async function fetchCourseVideoRows(courseId, studentEmail = '') {
@@ -807,9 +1542,13 @@ app.get(['/courses', '/api/courses'], async (req, res) => {
             const [courses] = await db.query(
                 `SELECT
                     c.*,
+                    MAX(u.username) AS instructor_name,
                     COUNT(DISTINCT v.id) AS video_count,
                     COUNT(DISTINCT CASE WHEN p.is_watched = 1 THEN p.video_id END) AS watched_count
                  FROM courses c
+                 LEFT JOIN users u
+                   ON u.id = c.instructor_id
+                  AND u.role = 'instructor'
                  LEFT JOIN videos v ON v.course_id = c.id
                  LEFT JOIN course_video_progress p
                    ON p.video_id = v.id AND p.student_email = ?
@@ -837,10 +1576,15 @@ app.get(['/courses', '/api/courses'], async (req, res) => {
         }
 
         const [courses] = await db.query(
-            `SELECT *
-             FROM courses
+            `SELECT
+                c.*,
+                u.username AS instructor_name
+             FROM courses c
+             LEFT JOIN users u
+               ON u.id = c.instructor_id
+              AND u.role = 'instructor'
              WHERE expiry_date IS NULL OR expiry_date > NOW()
-             ORDER BY created_at DESC`
+             ORDER BY c.created_at DESC`
         );
         return res.json(courses.map(normalizeCourse));
     } catch (error) {
@@ -1002,7 +1746,10 @@ app.post(['/videos/upload', '/api/videos/upload', '/api/course-videos'], upload.
     } catch (error) {
         console.error('Course video upload error:', error);
         const status = String(error.message || '').includes('Cloudinary upload is unavailable') ? 503 : 500;
-        return res.status(status).json({ error: error.message || 'Failed to upload video' });
+        return res.status(status).json({
+            error: status === 503 ? (error.message || 'Cloudinary upload is unavailable') : 'Failed to upload video',
+            details: error.message || 'Unknown upload error'
+        });
     }
 });
 
@@ -1074,7 +1821,10 @@ app.put('/api/course-videos/:videoId', optionalVideoUpload, async (req, res) => 
     } catch (error) {
         console.error('Course video update error:', error);
         const status = String(error.message || '').includes('Cloudinary upload is unavailable') ? 503 : 500;
-        return res.status(status).json({ error: error.message || 'Failed to update video' });
+        return res.status(status).json({
+            error: status === 503 ? (error.message || 'Cloudinary upload is unavailable') : 'Failed to update video',
+            details: error.message || 'Unknown update error'
+        });
     }
 });
 
@@ -1114,7 +1864,10 @@ app.delete('/api/course-videos/:videoId', async (req, res) => {
         return res.json({ message: 'Video deleted successfully' });
     } catch (error) {
         console.error('Course video delete error:', error);
-        return res.status(500).json({ error: 'Failed to delete video' });
+        return res.status(500).json({
+            error: 'Failed to delete video',
+            details: error.message || 'Unknown delete error'
+        });
     }
 });
 
@@ -1335,6 +2088,19 @@ app.post(['/courses', '/api/courses', '/submit-course'], upload.fields([
             await sendNewCourseNotifications(title);
         } catch (notificationError) {
             console.error('New course notification error:', notificationError);
+        }
+
+        try {
+            await sendNewCourseReleaseAnnouncement({
+                instructorId,
+                title,
+                category,
+                description,
+                durationLabel: durationOption.optionLabel,
+                durationPlan: durationOption.planLabel
+            });
+        } catch (releaseError) {
+            console.error('New course release announcement error:', releaseError);
         }
 
         return res.status(201).json({
@@ -1586,6 +2352,156 @@ app.get(['/notifications/:userId', '/api/notifications/:userId'], async (req, re
     }
 });
 
+app.get('/api/chat/conversations', async (req, res) => {
+    try {
+        const userId = asPositiveInt(req.query.userId);
+        if (!userId) {
+            return res.status(400).json({ error: 'Valid userId is required' });
+        }
+
+        const user = await getUserById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const conversations = await fetchChatConversationsForUser(userId);
+        return res.json(conversations);
+    } catch (error) {
+        console.error('Chat conversations fetch error:', error);
+        return res.status(500).json({ error: 'Failed to load conversations' });
+    }
+});
+
+app.get('/api/chat/messages', async (req, res) => {
+    try {
+        const userId = asPositiveInt(req.query.userId);
+        const otherUserId = asPositiveInt(req.query.withUserId);
+
+        if (!userId || !otherUserId) {
+            return res.status(400).json({ error: 'Valid userId and withUserId are required' });
+        }
+
+        const participants = await getChatParticipants(userId, otherUserId);
+        if (!participants) {
+            return res.status(403).json({ error: 'You can only message linked students or instructors from active courses' });
+        }
+
+        await db.query(
+            `UPDATE chat_messages
+             SET is_read = 1,
+                 read_at = NOW()
+             WHERE sender_id = ?
+               AND recipient_id = ?
+               AND is_read = 0`,
+            [participants.otherUser.id, participants.currentUser.id]
+        );
+
+        const [rows] = await db.query(
+            `SELECT
+                cm.id,
+                cm.sender_id,
+                cm.recipient_id,
+                cm.message,
+                cm.course_id,
+                cm.is_read,
+                cm.read_at,
+                cm.created_at,
+                s.username AS sender_name,
+                s.role AS sender_role,
+                r.username AS recipient_name,
+                r.role AS recipient_role
+             FROM chat_messages cm
+             INNER JOIN users s ON s.id = cm.sender_id
+             INNER JOIN users r ON r.id = cm.recipient_id
+             WHERE (cm.sender_id = ? AND cm.recipient_id = ?)
+                OR (cm.sender_id = ? AND cm.recipient_id = ?)
+             ORDER BY cm.created_at ASC, cm.id ASC`,
+            [participants.currentUser.id, participants.otherUser.id, participants.otherUser.id, participants.currentUser.id]
+        );
+
+        return res.json({
+            conversation: {
+                partner_id: Number(participants.otherUser.id),
+                partner_name: participants.otherUser.username || 'User',
+                partner_role: participants.otherUser.role,
+                partner_photo: participants.otherUser.profile_photo || DEFAULT_PROFILE_PHOTO,
+                shared_courses: participants.sharedCourses,
+                shared_course_count: participants.sharedCourses.length,
+                shared_course_summary: summarizeSharedCourses(participants.sharedCourses)
+            },
+            messages: rows.map((row) => ({
+                id: Number(row.id),
+                sender_id: Number(row.sender_id),
+                recipient_id: Number(row.recipient_id),
+                sender_name: row.sender_name || 'User',
+                sender_role: row.sender_role,
+                recipient_name: row.recipient_name || 'User',
+                recipient_role: row.recipient_role,
+                course_id: row.course_id ? Number(row.course_id) : null,
+                message: row.message || '',
+                is_read: Boolean(row.is_read),
+                read_at: row.read_at,
+                created_at: row.created_at
+            }))
+        });
+    } catch (error) {
+        console.error('Chat messages fetch error:', error);
+        return res.status(500).json({ error: 'Failed to load messages' });
+    }
+});
+
+app.post('/api/chat/messages', async (req, res) => {
+    try {
+        const senderId = asPositiveInt(req.body.senderId);
+        const recipientId = asPositiveInt(req.body.recipientId);
+        const message = String(req.body.message || '').trim();
+
+        if (!senderId || !recipientId || !message) {
+            return res.status(400).json({ error: 'senderId, recipientId and message are required' });
+        }
+
+        if (message.length > 4000) {
+            return res.status(400).json({ error: 'Message is too long' });
+        }
+
+        const participants = await getChatParticipants(senderId, recipientId);
+        if (!participants) {
+            return res.status(403).json({ error: 'You can only message linked students or instructors from active courses' });
+        }
+
+        const createdAt = new Date();
+        const [result] = await db.query(
+            `INSERT INTO chat_messages (sender_id, recipient_id, course_id, message, is_read, read_at, created_at)
+             VALUES (?, ?, ?, ?, 0, NULL, ?)`,
+            [
+                participants.currentUser.id,
+                participants.otherUser.id,
+                participants.primaryCourse ? Number(participants.primaryCourse.id) : null,
+                message,
+                createdAt
+            ]
+        );
+
+        return res.status(201).json({
+            id: Number(result.insertId),
+            sender_id: Number(participants.currentUser.id),
+            recipient_id: Number(participants.otherUser.id),
+            sender_name: participants.currentUser.username || 'User',
+            sender_role: participants.currentUser.role,
+            recipient_name: participants.otherUser.username || 'User',
+            recipient_role: participants.otherUser.role,
+            course_id: participants.primaryCourse ? Number(participants.primaryCourse.id) : null,
+            message,
+            is_read: false,
+            read_at: null,
+            created_at: createdAt
+        });
+    } catch (error) {
+        console.error('Chat message send error:', error);
+        return res.status(500).json({ error: 'Failed to send message' });
+    }
+});
+
 app.get('/api/instructor-messages/:instructorId', async (req, res) => {
     try {
         const instructorId = asPositiveInt(req.params.instructorId);
@@ -1810,6 +2726,88 @@ app.get('/api/student-profile', async (req, res) => {
         });
     } catch (error) {
         console.error('Student profile fetch error:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.get('/api/instructor-profile', async (req, res) => {
+    try {
+        const email = (req.query.email || '').toString().trim();
+        if (!email) {
+            return res.status(400).json({ error: 'Email is required' });
+        }
+
+        const [rows] = await db.query(
+            `SELECT id, username AS name, email, expertise, profile_photo
+             FROM users
+             WHERE email = ? AND role = 'instructor'`,
+            [email]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Instructor not found' });
+        }
+
+        const instructor = rows[0];
+        return res.json({
+            id: instructor.id,
+            name: instructor.name,
+            email: instructor.email,
+            expertise: instructor.expertise || '',
+            photo: instructor.profile_photo || DEFAULT_PROFILE_PHOTO
+        });
+    } catch (error) {
+        console.error('Instructor profile fetch error:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.put('/api/instructor-profile', async (req, res) => {
+    try {
+        const email = String(req.body.email || '').trim();
+        const name = String(req.body.name || '').trim();
+        const expertise = String(req.body.expertise || '').trim();
+
+        if (!email || !name) {
+            return res.status(400).json({ error: 'Email and name are required' });
+        }
+
+        const [result] = await db.query(
+            `UPDATE users
+             SET username = ?, expertise = ?
+             WHERE email = ? AND role = 'instructor'`,
+            [name, expertise, email]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Instructor not found' });
+        }
+
+        await db.query(
+            `UPDATE group_messages
+             SET sender_name = ?
+             WHERE sender_id = (
+                SELECT id FROM (
+                    SELECT id
+                    FROM users
+                    WHERE email = ? AND role = 'instructor'
+                    LIMIT 1
+                ) AS matched_instructor
+             )
+               AND role = 'instructor'`,
+            [name, email]
+        );
+
+        return res.json({
+            message: 'Instructor profile updated successfully',
+            profile: {
+                name,
+                email,
+                expertise
+            }
+        });
+    } catch (error) {
+        console.error('Instructor profile update error:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -2257,6 +3255,169 @@ app.post('/api/terminate-instructor', async (req, res) => {
     } catch (error) {
         console.error('Terminate instructor error:', error);
         return res.status(500).json({ error: 'Failed to terminate account' });
+    }
+});
+
+// ============ GROUP MESSAGE APIs ============
+app.post('/api/group-messages/send', async (req, res) => {
+    try {
+        const senderId = Number.parseInt(req.body.sender_id, 10);
+        const senderName = String(req.body.sender_name || '').trim();
+        const role = String(req.body.role || '').trim().toLowerCase();
+        const groupType = String(req.body.group_type || '').trim().toLowerCase();
+        const message = String(req.body.message || '').trim();
+        const messageCategory = 'instructor_message';
+
+        // Validate inputs
+        if (!Number.isInteger(senderId) || senderId <= 0 || !role || !groupType || !message) {
+            return res.status(400).json({ 
+                error: 'Missing required fields: sender_id, role, group_type, message' 
+            });
+        }
+
+        // Validate role
+        if (role !== 'student' && role !== 'instructor') {
+            return res.status(400).json({ error: 'Invalid role. Must be student or instructor.' });
+        }
+
+        // Validate group_type
+        if (groupType !== 'students' && groupType !== 'instructors') {
+            return res.status(400).json({ error: 'Invalid group_type. Must be students or instructors.' });
+        }
+
+        // CRITICAL: Only instructors can send messages
+        if (role !== 'instructor') {
+            return res.status(403).json({ 
+                error: 'Only instructors can send messages.' 
+            });
+        }
+
+        const [senders] = await db.query(
+            `SELECT username
+             FROM users
+             WHERE id = ? AND role = 'instructor'
+             LIMIT 1`,
+            [senderId]
+        );
+
+        if (senders.length === 0) {
+            return res.status(404).json({ error: 'Instructor not found.' });
+        }
+
+        const accountName = String(senders[0].username || '').trim();
+        const resolvedSenderName = resolvePreferredDisplayName(
+            [senderName, accountName],
+            accountName || 'Instructor'
+        );
+        if (!resolvedSenderName) {
+            return res.status(400).json({ error: 'Instructor name is required.' });
+        }
+
+        if (resolvedSenderName !== accountName) {
+            await db.query(
+                `UPDATE users
+                 SET username = ?
+                 WHERE id = ? AND role = 'instructor'`,
+                [resolvedSenderName, senderId]
+            );
+
+            await db.query(
+                `UPDATE group_messages
+                 SET sender_name = ?
+                 WHERE sender_id = ? AND role = 'instructor'`,
+                [resolvedSenderName, senderId]
+            );
+        }
+
+        // Insert message
+        const timestamp = new Date();
+        const [result] = await db.query(
+            `INSERT INTO group_messages (sender_id, sender_name, role, group_type, message_category, message, timestamp)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [senderId, resolvedSenderName, role, groupType, messageCategory, message, timestamp]
+        );
+
+        return res.status(201).json({
+            id: result.insertId,
+            sender_id: senderId,
+            sender_name: resolvedSenderName,
+            role,
+            group_type: groupType,
+            message_category: messageCategory,
+            message,
+            timestamp
+        });
+    } catch (error) {
+        console.error('Group message send error:', error);
+        return res.status(500).json({ error: 'Failed to send message' });
+    }
+});
+
+app.get('/api/group-messages/:group_type', async (req, res) => {
+    try {
+        const groupType = String(req.params.group_type || '').trim().toLowerCase();
+        const requestedCategory = String(req.query.category || '').trim().toLowerCase();
+
+        // Validate group_type
+        if (groupType !== 'students' && groupType !== 'instructors') {
+            return res.status(400).json({ error: 'Invalid group_type. Must be students or instructors.' });
+        }
+
+        if (requestedCategory && requestedCategory !== 'new_release' && requestedCategory !== 'instructor_message') {
+            return res.status(400).json({ error: 'Invalid category. Must be new_release or instructor_message.' });
+        }
+
+        // Get all messages for this group
+        const [rows] = await db.query(
+            `SELECT
+                gm.id,
+                gm.sender_id,
+                gm.sender_name,
+                u.username AS sender_account_name,
+                gm.role,
+                gm.group_type,
+                gm.message_category,
+                gm.message,
+                gm.timestamp
+             FROM group_messages gm
+             LEFT JOIN users u ON u.id = gm.sender_id
+             WHERE gm.group_type = ?
+             ORDER BY gm.timestamp ASC`,
+            [groupType]
+        );
+
+        const messages = rows
+            .map((row) => {
+                const messageCategory = normalizeGroupMessageCategory(row.message_category, row.message);
+
+                return {
+                    id: row.id,
+                    sender_id: row.sender_id,
+                    sender_name: resolvePreferredDisplayName(
+                        [row.sender_name, row.sender_account_name],
+                        row.role === 'instructor' ? 'Instructor' : 'User'
+                    ),
+                    sender_actual_name: resolvePreferredDisplayName(
+                        [row.sender_account_name, row.sender_name],
+                        row.role === 'instructor' ? 'Instructor' : 'User'
+                    ),
+                    role: row.role,
+                    group_type: row.group_type,
+                    message_category: messageCategory,
+                    message: row.message,
+                    timestamp: row.timestamp
+                };
+            })
+            .filter((message) => !requestedCategory || message.message_category === requestedCategory);
+
+        return res.json({
+            group_type: groupType,
+            category: requestedCategory || '',
+            messages
+        });
+    } catch (error) {
+        console.error('Group messages fetch error:', error);
+        return res.status(500).json({ error: 'Failed to fetch messages' });
     }
 });
 

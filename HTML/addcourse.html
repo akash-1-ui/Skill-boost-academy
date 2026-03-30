@@ -25,7 +25,7 @@
           <h2>Course Details</h2>
           <p>Publish the core information that students see on the catalog.</p>
         </div>
-        <form id="createCourseForm" action="http://localhost:3000/courses" method="POST" enctype="multipart/form-data">
+        <form id="createCourseForm" action="http://localhost:3000/courses" method="POST" enctype="multipart/form-data" onsubmit="return false;">
           <label for="title">Course Title</label>
           <input type="text" id="title" name="title" required />
 
@@ -70,6 +70,7 @@
           <textarea id="description" name="description" required placeholder="Enter a brief course description..."></textarea>
 
           <button type="submit">Create Course</button>
+          <p id="courseFormStatus" class="form-status" hidden aria-live="polite"></p>
         </form>
       </section>
     </div>

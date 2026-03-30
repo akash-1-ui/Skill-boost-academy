@@ -66,6 +66,12 @@ document.getElementById('instructorRegistrationForm').addEventListener('submit',
             localStorage.setItem('instructorName', loginData.instructor.name);
             localStorage.setItem('instructorPhoto', loginData.instructor.photo || 'default-profile.png');
             localStorage.setItem('instructorEmail', loginData.instructor.email || email);
+            localStorage.setItem('user', JSON.stringify({
+                id: String(loginData.instructor.id),
+                role: 'instructor',
+                username: loginData.instructor.name || loginData.instructor.email || email,
+                email: loginData.instructor.email || email
+            }));
             
             // Show success message and redirect
             document.getElementById('success-message').style.display = 'block';

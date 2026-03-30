@@ -4,13 +4,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Student Dashboard</title>
+  <script>
+    (() => {
+      try {
+        const theme = localStorage.getItem('skillboost-theme-student') === 'light' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.setAttribute('data-theme-role', 'student');
+      } catch (error) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/CSS/home.css" />
+  <link rel="stylesheet" href="/CSS/home.css?v=20260331-theme-toggle" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 </head>
-<body class="student-dashboard">
+<body class="student-dashboard" data-app-role="student">
   <header class="topbar">
     <div class="topbar-left">
       <div class="brand">
@@ -20,6 +31,12 @@
           <span class="brand-subtitle">Student Studio</span>
         </div>
       </div>
+      <button type="button" class="theme-toggle" id="studentThemeToggle" data-theme-toggle data-theme-role="student">
+        <span class="theme-toggle-track" aria-hidden="true">
+          <span class="theme-toggle-thumb"></span>
+        </span>
+        <span class="theme-toggle-text" data-theme-label>Dark Mode</span>
+      </button>
     </div>
     <div class="topbar-center">
       <div class="search-bar topbar-search" id="searchBar">
@@ -29,6 +46,10 @@
     </div>
     <div class="topbar-right">
       <span class="student-name-pill" id="studentNamePill">Loading...</span>
+      <a class="student-notification-link" id="studentNotificationLink" href="notifications.html?role=student" aria-label="Open notifications">
+        <i class="fas fa-bell" aria-hidden="true"></i>
+        <span class="student-notification-badge" id="studentNotificationBadge" hidden>0</span>
+      </a>
       <button class="profile-icon" id="studentProfileIcon" type="button" aria-label="Open menu">
         <img class="topbar-avatar" id="studentProfilePhoto" src="/uploads/default-avatar.svg" alt="Profile Photo" onerror="this.src='/uploads/default-avatar.svg'" />
       </button>
@@ -179,6 +200,7 @@
   </div>
   <div class="drawer-overlay" id="profileOverlay"></div>
 
+  <script src="/js/theme_mode.js?v=20260331-theme-toggle"></script>
   <script src="/js/profile_drawer.js"></script>
   <script src="/js/account_actions.js"></script>
   <script>
@@ -245,6 +267,88 @@
     }
 
     const API_BASE = 'http://localhost:3000';
+    const STUDENT_NOTIFICATIONS_POLL_MS = 12000;
+    const STUDENT_NOTIFICATIONS_SEEN_PREFIX = 'studentNotificationsLastSeen_';
+    let studentNotificationPollHandle = null;
+
+    function getTimestampMs(value) {
+      const timestamp = new Date(value).getTime();
+      return Number.isNaN(timestamp) ? 0 : timestamp;
+    }
+
+    function getStudentNotificationStorageId() {
+      return String(localStorage.getItem('studentEmail') || localStorage.getItem('studentId') || '').trim();
+    }
+
+    function getStudentNotificationSeenKey(feedKey = 'all') {
+      const storageId = getStudentNotificationStorageId();
+      return storageId ? `${STUDENT_NOTIFICATIONS_SEEN_PREFIX}${storageId}_${feedKey}` : '';
+    }
+
+    function inferStudentNotificationCategory(message) {
+      const normalized = String(message?.message_category || '').trim().toLowerCase();
+      if (normalized === 'new_release' || normalized === 'instructor_message') {
+        return normalized;
+      }
+
+      return String(message?.message || '').trim().startsWith('NEW RELEASE:')
+        ? 'new_release'
+        : 'instructor_message';
+    }
+
+    function updateStudentNotificationBadge(count) {
+      const badge = document.getElementById('studentNotificationBadge');
+      const link = document.getElementById('studentNotificationLink');
+      if (!badge || !link) return;
+
+      const safeCount = Math.max(0, Number(count) || 0);
+      badge.hidden = safeCount === 0;
+      badge.textContent = safeCount > 99 ? '99+' : String(safeCount);
+      link.setAttribute(
+        'aria-label',
+        safeCount > 0
+          ? `Open notifications, ${safeCount} new message${safeCount === 1 ? '' : 's'}`
+          : 'Open notifications'
+      );
+    }
+
+    async function loadStudentNotificationCount() {
+      const storageId = getStudentNotificationStorageId();
+      if (!storageId) {
+        updateStudentNotificationBadge(0);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/group-messages/students`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch notifications (${response.status})`);
+        }
+
+        const payload = await response.json();
+        const messages = Array.isArray(payload.messages) ? payload.messages : [];
+        const unreadCount = messages.filter((message) => {
+          const category = inferStudentNotificationCategory(message);
+          const feedKey = category === 'new_release' ? 'new_releases' : 'instructor_messages';
+          const lastSeenMs = getTimestampMs(localStorage.getItem(getStudentNotificationSeenKey(feedKey)));
+          return String(message?.role || '').toLowerCase() === 'instructor'
+            && getTimestampMs(message?.timestamp) > lastSeenMs;
+        }).length;
+
+        updateStudentNotificationBadge(unreadCount);
+      } catch (error) {
+        console.error('Error loading student notification count:', error);
+      }
+    }
+
+    function startStudentNotificationPolling() {
+      loadStudentNotificationCount();
+      if (studentNotificationPollHandle) {
+        clearInterval(studentNotificationPollHandle);
+      }
+      studentNotificationPollHandle = setInterval(loadStudentNotificationCount, STUDENT_NOTIFICATIONS_POLL_MS);
+    }
+
     function resolveAssetPath(rawPath, fallbackBase) {
       if (!rawPath) return '';
       let value = String(rawPath).trim();
@@ -335,6 +439,7 @@
       document.getElementById('courseModalStatus').textContent = course.status || 'Active';
       document.getElementById('courseModalDuration').textContent = course.duration_summary || course.duration || 'Self-paced';
       document.getElementById('courseModalCategory').textContent = course.category || 'General';
+      document.getElementById('courseModalInstructor').textContent = course.instructor_name || 'Instructor';
       document.getElementById('courseModalDescription').textContent = course.description || 'No description available';
       document.getElementById('courseModalExpiry').textContent = buildExpiryText(course);
       
@@ -426,6 +531,7 @@
         const durationText = escapeHtml(course.duration_summary || course.duration || 'Self-paced');
         const statusText = escapeHtml(course.status || 'Active');
         const expiryText = escapeHtml(buildExpiryText(course));
+        const instructorName = escapeHtml(course.instructor_name || 'Unknown Instructor');
         const coverMarkup = coverPath
           ? `<img class="course-cover" src="${coverPath}" alt="${title}" loading="lazy" onerror="this.closest('.media-container').classList.add('is-fallback'); this.remove();">`
           : '<div class="course-cover-fallback">No cover</div>';
@@ -444,6 +550,10 @@
               </div>
             </div>
             <button type="button" class="student-course-btn">Open Playlist</button>
+            <p class="course-instructor-name">
+              <i class="fas fa-chalkboard-user" aria-hidden="true"></i>
+              by <strong>${instructorName}</strong>
+            </p>
           </div>
         `;
 
@@ -549,6 +659,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       fetchCourses();
       updateStudentStats();
+      startStudentNotificationPolling();
     });
 
     const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
@@ -601,6 +712,7 @@
             }
             localStorage.setItem(`studentName_${studentEmail}`, profile.name);
           }
+          loadStudentNotificationCount();
         })
         .catch(() => {
           document.getElementById('studentProfilePhoto').src = DEFAULT_PROFILE_PHOTO;
@@ -608,12 +720,14 @@
           if (studentNamePill) {
             studentNamePill.textContent = 'Student';
           }
+          loadStudentNotificationCount();
         });
     } else {
       document.getElementById('studentProfilePhoto').src = DEFAULT_PROFILE_PHOTO;
       if (studentNamePill) {
         studentNamePill.textContent = 'Guest';
       }
+      updateStudentNotificationBadge(0);
     }
 
     // Save student photo to database if updated in localStorage (for instant update)
@@ -650,6 +764,25 @@
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         closeCourseModal();
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        loadStudentNotificationCount();
+      }
+    });
+
+    window.addEventListener('storage', (event) => {
+      const storageId = getStudentNotificationStorageId();
+      if (storageId && event.key && event.key.startsWith(`${STUDENT_NOTIFICATIONS_SEEN_PREFIX}${storageId}_`)) {
+        loadStudentNotificationCount();
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (studentNotificationPollHandle) {
+        clearInterval(studentNotificationPollHandle);
       }
     });
   </script>

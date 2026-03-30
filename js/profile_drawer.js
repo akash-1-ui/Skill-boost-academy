@@ -114,6 +114,34 @@
     }
   }
 
+  async function refreshInstructorProfile(email) {
+    if (!email) return;
+    try {
+      const res = await fetch(`http://localhost:3000/api/instructor-profile?email=${encodeURIComponent(email)}`);
+      if (!res.ok) return;
+      const profile = await res.json();
+      const normalized = {
+        name: profile.name || '',
+        email: profile.email || email,
+        extra: profile.expertise || '',
+        photo: normalizePhoto(profile.photo)
+      };
+      localStorage.setItem('instructorName', normalized.name);
+      localStorage.setItem('instructorEmail', normalized.email);
+      localStorage.setItem('instructorCourse', normalized.extra);
+      localStorage.setItem('instructorPhoto', normalized.photo);
+      setProfileFields(normalized);
+      const nameSpan = document.getElementById('instructorName');
+      if (nameSpan && normalized.name) {
+        nameSpan.textContent = normalized.name;
+      }
+      const topPhoto = document.getElementById('instructorProfilePhoto');
+      if (topPhoto) topPhoto.src = normalized.photo;
+    } catch (error) {
+      console.error('Failed to refresh instructor profile', error);
+    }
+  }
+
   function loadProfile() {
     setStatus('', null);
     if (role === 'student') {
@@ -125,6 +153,7 @@
       setProfileFields(profile);
       const topPhoto = document.getElementById('instructorProfilePhoto');
       if (topPhoto) topPhoto.src = normalizePhoto(profile.photo);
+      refreshInstructorProfile(profile.email);
     }
   }
 
@@ -187,6 +216,14 @@
           localStorage.setItem('instructorCourse', extra);
           localStorage.setItem('instructorPhoto', photo);
 
+          if (email) {
+            await fetch('http://localhost:3000/api/instructor-profile', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, name, expertise: extra })
+            });
+          }
+
           if (photo.startsWith('data:image') && email) {
             await fetch('http://localhost:3000/api/instructor-photo-base64', {
               method: 'POST',
@@ -199,6 +236,12 @@
           if (nameSpan) nameSpan.textContent = name;
           const topPhoto = document.getElementById('instructorProfilePhoto');
           if (topPhoto) topPhoto.src = photo || defaultPhoto;
+          localStorage.setItem('user', JSON.stringify({
+            id: localStorage.getItem('instructorId') || '',
+            role: 'instructor',
+            username: name || email,
+            email
+          }));
         }
 
         setStatus('Profile updated successfully.', 'success');

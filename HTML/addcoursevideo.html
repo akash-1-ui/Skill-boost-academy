@@ -25,7 +25,7 @@
           <h2>Upload Lessons</h2>
           <p>Attach lesson videos to an existing course to make it ready for learners.</p>
         </div>
-        <form id="uploadVideoForm" enctype="multipart/form-data">
+        <form id="uploadVideoForm" enctype="multipart/form-data" onsubmit="return false;">
           <label for="courseSelect">Select Course</label>
           <select id="courseSelect" name="course_id" required>
             <option value="">Choose a course</option>
@@ -39,7 +39,8 @@
 
           <input type="hidden" id="video_instructor_id" name="instructor_id" />
 
-          <button type="submit">Upload Video</button>
+          <button type="button" id="uploadVideoBtn">Upload Video</button>
+          <p id="uploadVideoStatus" class="form-status" hidden aria-live="polite"></p>
         </form>
       </section>
     </div>

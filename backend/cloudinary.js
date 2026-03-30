@@ -61,7 +61,9 @@ async function removeTemporaryFile(filePath) {
 async function uploadVideoAsset(filePath, options = {}) {
     const status = getCloudinaryStatus();
     if (!status.ready) {
-        await removeTemporaryFile(filePath);
+        if (options.removeLocalFile !== false) {
+            await removeTemporaryFile(filePath);
+        }
         throw new Error(`Cloudinary upload is unavailable: ${status.reason}`);
     }
 
@@ -76,7 +78,9 @@ async function uploadVideoAsset(filePath, options = {}) {
 
         return result;
     } finally {
-        await removeTemporaryFile(filePath);
+        if (options.removeLocalFile !== false) {
+            await removeTemporaryFile(filePath);
+        }
     }
 }
 

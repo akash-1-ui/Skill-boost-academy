@@ -250,6 +250,8 @@ studentForm.addEventListener('submit', async (e) => {
       fetch(`http://localhost:3000/api/student-profile?email=${encodeURIComponent(email)}`)
         .then((res2) => res2.json())
         .then((profile) => {
+          const resolvedStudentId = String(profile?.id || result?.student?.id || '');
+          const resolvedStudentName = profile?.name || result?.student?.name || email;
           if (result && result.student && result.student.id) {
             localStorage.setItem('studentId', String(result.student.id));
           }
@@ -260,13 +262,27 @@ studentForm.addEventListener('submit', async (e) => {
             localStorage.setItem('studentId', String(profile.id));
           }
           localStorage.setItem('studentEmail', email);
+          localStorage.setItem('user', JSON.stringify({
+            id: resolvedStudentId,
+            role: 'student',
+            username: resolvedStudentName,
+            email
+          }));
           window.location.href = 'student_home.html';
         })
         .catch(() => {
+          const fallbackStudentId = String(result?.student?.id || '');
+          const fallbackStudentName = result?.student?.name || email;
           if (result && result.student && result.student.id) {
             localStorage.setItem('studentId', String(result.student.id));
           }
           localStorage.setItem('studentEmail', email);
+          localStorage.setItem('user', JSON.stringify({
+            id: fallbackStudentId,
+            role: 'student',
+            username: fallbackStudentName,
+            email
+          }));
           window.location.href = 'student_home.html';
         });
     } else {
@@ -309,6 +325,12 @@ instructorForm.addEventListener('submit', async (e) => {
     localStorage.setItem('instructorName', data.instructor.name);
     localStorage.setItem('instructorPhoto', data.instructor.photo || '/uploads/default-avatar.svg');
     localStorage.setItem('instructorEmail', data.instructor.email);
+    localStorage.setItem('user', JSON.stringify({
+      id: String(data.instructor.id),
+      role: 'instructor',
+      username: data.instructor.name || data.instructor.email || 'Instructor',
+      email: data.instructor.email || email
+    }));
 
     window.location.href = 'instructor_home.html';
   } catch (err) {

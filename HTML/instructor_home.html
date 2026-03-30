@@ -4,12 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Instructor Dashboard</title>
+    <script>
+        (() => {
+            try {
+                const theme = localStorage.getItem('skillboost-theme-instructor') === 'light' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme-role', 'instructor');
+            } catch (error) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/CSS/instructorhome.css">
+    <link rel="stylesheet" href="/CSS/instructorhome.css?v=20260331-theme-toggle">
 </head>
-<body>
+<body data-app-role="instructor">
     <aside class="sidebar">
         <div class="sidebar-brand">
             <span class="brand-mark">SB</span>
@@ -42,6 +53,17 @@
                         <p class="dashboard-subtitle">Track your course performance and learner engagement in one place.</p>
                     </div>
                     <div class="header-actions">
+                        <button type="button" class="theme-toggle" id="instructorThemeToggle" data-theme-toggle data-theme-role="instructor">
+                            <span class="theme-toggle-track" aria-hidden="true">
+                                <span class="theme-toggle-thumb"></span>
+                            </span>
+                            <span class="theme-toggle-text" data-theme-label>Dark Mode</span>
+                        </button>
+                        <a href="notifications.html?role=instructor" class="header-notification-link" aria-label="Open notifications">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M12 3.5a4 4 0 0 0-4 4v1.08c0 1.03-.3 2.05-.86 2.92L5.7 13.67a1.75 1.75 0 0 0 1.47 2.73h9.66a1.75 1.75 0 0 0 1.47-2.73l-1.44-2.17A5.33 5.33 0 0 1 16 8.58V7.5a4 4 0 0 0-4-4Zm0 17.25a2.78 2.78 0 0 0 2.55-1.67h-5.1A2.78 2.78 0 0 0 12 20.75Z"/>
+                            </svg>
+                        </a>
                         <button type="button" class="profile-icon-btn" data-profile-toggle aria-label="Open profile">
                             <img id="instructorProfilePhoto" src="/uploads/default-avatar.svg" alt="Profile Photo" onerror="this.src='/uploads/default-avatar.svg'">
                         </button>
@@ -104,35 +126,40 @@
                 </div>
 
                 <section class="courses-section analytics-section dashboard-switcher-section">
-                    <div class="dashboard-switcher-head">
-                        <div>
-                            <p class="section-kicker">Analytics</p>
-                            <div class="dashboard-switcher-tabs" role="tablist" aria-label="Dashboard analytics views">
-                                <button
-                                    type="button"
-                                    class="dashboard-tab is-active"
-                                    id="dashboardTabInsights"
-                                    data-dashboard-tab="insights"
-                                    role="tab"
-                                    aria-selected="true"
-                                    aria-controls="dashboardPanelInsights"
-                                >
-                                    Performance Insights
-                                </button>
-                                <button
-                                    type="button"
-                                    class="dashboard-tab"
-                                    id="dashboardTabWatch"
-                                    data-dashboard-tab="watch"
-                                    role="tab"
-                                    aria-selected="false"
-                                    aria-controls="dashboardPanelWatch"
-                                >
-                                    Top Watched Courses
-                                </button>
+                    <div class="analytics-header">
+                        <div class="analytics-header-content">
+                            <div>
+                                <p class="section-kicker">Performance Analytics</p>
+                                <h3 class="analytics-title">Track Your Impact</h3>
                             </div>
+                            <p class="analytics-description">Monitor course performance and learner engagement metrics.</p>
                         </div>
-                        <p class="section-subtitle dashboard-switcher-copy">Click a heading to switch between quick insights and the watched course list.</p>
+                        <div class="dashboard-switcher-tabs" role="tablist" aria-label="Dashboard analytics views">
+                            <button
+                                type="button"
+                                class="dashboard-tab is-active"
+                                id="dashboardTabInsights"
+                                data-dashboard-tab="insights"
+                                role="tab"
+                                aria-selected="true"
+                                aria-controls="dashboardPanelInsights"
+                            >
+                                <span class="tab-icon">📊</span>
+                                Performance Insights
+                            </button>
+                            <button
+                                type="button"
+                                class="dashboard-tab"
+                                id="dashboardTabWatch"
+                                data-dashboard-tab="watch"
+                                role="tab"
+                                aria-selected="false"
+                                aria-controls="dashboardPanelWatch"
+                            >
+                                <span class="tab-icon">🎬</span>
+                                Top Watched Courses
+                            </button>
+                        </div>
                     </div>
 
                     <div
@@ -145,19 +172,19 @@
                         <div class="insight-grid">
                             <article class="insight-card">
                                 <div class="insight-card-header">
-                                    <h4>Top Course</h4>
-                                    <span class="insight-pill">Highest demand</span>
+                                    <h4>Top Performing Course</h4>
+                                    <span class="insight-pill">🏆 Highest Demand</span>
                                 </div>
                                 <p class="insight-value" id="topCourseName">No courses yet</p>
                                 <p class="insight-meta">Based on current learner enrollments.</p>
                             </article>
                             <article class="insight-card">
                                 <div class="insight-card-header">
-                                    <h4>Latest Upload</h4>
-                                    <span class="insight-pill">Recent</span>
+                                    <h4>Latest Release</h4>
+                                    <span class="insight-pill">✨ Recent</span>
                                 </div>
                                 <p class="insight-value" id="latestUpload">No uploads yet</p>
-                                <p class="insight-meta">Most recently published lesson or course update.</p>
+                                <p class="insight-meta">Most recently published course or update.</p>
                             </article>
                         </div>
                     </div>
@@ -171,12 +198,12 @@
                         hidden
                     >
                         <div class="table-shell">
-                            <table class="course-table" id="topWatchedTable">
+                            <table class="course-table top-watched-table" id="topWatchedTable">
                                 <thead>
                                     <tr>
-                                        <th>Course</th>
-                                        <th>Watch Hours</th>
-                                        <th>Watch Records</th>
+                                        <th class="col-course">Course Title</th>
+                                        <th class="col-hours">Watch Hours</th>
+                                        <th class="col-records">Watch Records</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
@@ -212,7 +239,7 @@
                 </div>
                 <div class="form-shell">
                     <div class="form-card">
-                        <form id="createCourseForm" class="dashboard-form" action="http://localhost:3000/courses" method="POST" enctype="multipart/form-data">
+                        <form id="createCourseForm" class="dashboard-form" action="http://localhost:3000/courses" method="POST" enctype="multipart/form-data" onsubmit="return false;">
                             <label for="title">Course Title</label>
                             <input type="text" id="title" name="title" required />
 
@@ -258,6 +285,7 @@
                             <textarea id="description" name="description" required placeholder="Enter a brief course description..."></textarea>
 
                             <button type="submit" id="courseSubmitBtn">Create Course</button>
+                            <p id="courseFormStatus" class="form-status" hidden aria-live="polite"></p>
                         </form>
                     </div>
                 </div>
@@ -275,7 +303,7 @@
                     <div class="form-card">
                         <p class="form-hint" id="manageCourseNote">Managing: <strong id="manageCourseTitle">Select a course</strong></p>
                         <p class="form-hint">Videos are uploaded to Cloudinary and removed automatically when the course expires.</p>
-                        <form id="uploadVideoForm" class="dashboard-form" enctype="multipart/form-data">
+                        <form id="uploadVideoForm" class="dashboard-form" enctype="multipart/form-data" onsubmit="return false;">
                             <label for="courseSelect">Select Course</label>
                             <select id="courseSelect" name="course_id" required>
                                 <option value="">Choose a course</option>
@@ -289,7 +317,29 @@
 
                             <input type="hidden" id="video_instructor_id" name="instructor_id" />
 
-                            <button type="submit">Upload Video</button>
+                            <button type="button" id="uploadVideoBtn">Upload Video</button>
+                            <div
+                                id="uploadVideoProgress"
+                                class="upload-progress"
+                                hidden
+                                aria-live="polite"
+                            >
+                                <div class="upload-progress-head">
+                                    <span id="uploadVideoProgressLabel">Preparing upload...</span>
+                                    <strong id="uploadVideoProgressPercent">0%</strong>
+                                </div>
+                                <div
+                                    class="upload-progress-bar"
+                                    role="progressbar"
+                                    aria-label="Video upload progress"
+                                    aria-valuemin="0"
+                                    aria-valuemax="100"
+                                    aria-valuenow="0"
+                                >
+                                    <span id="uploadVideoProgressFill" class="upload-progress-fill" style="width: 0%"></span>
+                                </div>
+                            </div>
+                            <p id="uploadVideoStatus" class="form-status" hidden aria-live="polite"></p>
                         </form>
                     </div>
                 </div>
@@ -390,6 +440,7 @@
     </div>
     <div class="drawer-overlay" id="profileOverlay"></div>
 
+    <script src="/js/theme_mode.js?v=20260331-theme-toggle"></script>
     <script src="/js/profile_drawer.js"></script>
     <script src="/js/account_actions.js"></script>
     <script src="/js/addcourse.js"></script>
@@ -578,16 +629,16 @@
             tbody.innerHTML = '';
 
             if (!Array.isArray(topWatchedCourses) || topWatchedCourses.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No watch analytics available yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 2rem;">No watch analytics available yet</td></tr>';
                 return;
             }
 
             topWatchedCourses.forEach((course) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${course.title}</td>
-                    <td>${course.totalWatchHours}</td>
-                    <td>${course.watchRecords}</td>
+                    <td class="col-course">${escapeHtml(course.title)}</td>
+                    <td class="col-hours">${course.totalWatchHours}</td>
+                    <td class="col-records">${course.watchRecords}</td>
                 `;
                 tbody.appendChild(row);
             });
@@ -974,7 +1025,7 @@
                 document.getElementById('totalCourses').textContent = metrics.totalCourses || 0;
                 document.getElementById('totalStudents').textContent = metrics.totalStudents || 0;
                 document.getElementById('expiringCourses').textContent = metrics.expiringCourses || 0;
-                document.getElementById('totalWatchHours').textContent = metrics.totalWatchHours || 0;
+                document.getElementById('totalWatchHours').textContent = formatWatchHours(metrics.totalWatchHours || 0);
 
                 document.getElementById('latestUpload').textContent = formatDate(metrics.latestUpload);
 
@@ -1086,6 +1137,20 @@
         });
 
         loadInstructorDashboard();
+
+        function formatWatchHours(totalHours) {
+            const numHours = Number(totalHours) || 0;
+            const totalMinutes = Math.round(numHours * 60);
+            
+            // If less than 1 hour (59 minutes or less)
+            if (totalMinutes < 60) {
+                return `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
+            }
+            
+            // If 1 hour or more
+            const decimalHours = (totalMinutes / 60).toFixed(2);
+            return `${decimalHours}hr`;
+        }
 
         window.addEventListener('load', () => {
             handleCourseEditRequest();
