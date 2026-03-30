@@ -1,3 +1,42 @@
+const CONTACT_RETURN_ROUTES = {
+  student: {
+    href: 'student_home.html',
+    ctaLabel: 'Back to Student Dashboard',
+    navLabel: 'Back'
+  },
+  instructor: {
+    href: 'instructor_home.html',
+    ctaLabel: 'Back to Instructor Dashboard',
+    navLabel: 'Back'
+  }
+};
+
+function configureContactReturnLinks() {
+  const params = new URLSearchParams(window.location.search);
+  const source = String(params.get('from') || '').trim().toLowerCase();
+  const route = CONTACT_RETURN_ROUTES[source];
+
+  if (!route) {
+    return;
+  }
+
+  document.querySelectorAll('[data-home-link]').forEach((link) => {
+    link.setAttribute('href', route.href);
+  });
+
+  const navLink = document.querySelector('[data-home-nav-link]');
+  if (navLink) {
+    navLink.textContent = route.navLabel;
+  }
+
+  const ctaLink = document.querySelector('[data-home-cta]');
+  if (ctaLink) {
+    ctaLink.textContent = route.ctaLabel;
+  }
+}
+
+configureContactReturnLinks();
+
 document.getElementById('contactForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   const name = document.getElementById('name').value.trim();
