@@ -21,6 +21,7 @@ const {
     deleteVideoAssetByUrl,
     extractCloudinaryPublicId
 } = require('./cloudinary');
+const { saasRouter, ensureMultiTenantSchema } = require('./saas');
 
 let cron = null;
 try {
@@ -108,9 +109,32 @@ app.use((req, res, next) => {
     next();
 });
 
+app.use('/api', saasRouter);
+
 // Root route - serve index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'HTML', 'index.html'));
+});
+
+// Health check endpoint - verify backend and Cloudinary status
+app.get('/api/health', (req, res) => {
+    const cloudinaryStatus = getCloudinaryStatus();
+    const status = {
+        backend: 'ok',
+        timestamp: new Date().toISOString(),
+        cloudinary: {
+            ready: cloudinaryStatus.ready,
+            reason: cloudinaryStatus.reason || 'Cloudinary is properly configured'
+        },
+        environmentVariables: {
+            hasCloudinaryCloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
+            hasCloudinaryApiKey: !!process.env.CLOUDINARY_API_KEY,
+            hasCloudinaryApiSecret: !!process.env.CLOUDINARY_API_SECRET,
+            databaseUrl: !!process.env.DATABASE_URL
+        }
+    };
+    
+    res.status(cloudinaryStatus.ready ? 200 : 503).json(status);
 });
 
 function asPositiveInt(value) {
@@ -979,6 +1003,7 @@ async function initializeTables() {
 
 initializeTables()
     .then(async () => {
+        await ensureMultiTenantSchema();
         scheduleCourseLifecycleJobs();
         try {
             const result = await runCourseLifecycleSweep();
@@ -1691,13 +1716,18 @@ app.post(['/videos/upload', '/api/videos/upload', '/api/course-videos'], upload.
         const instructorId = asPositiveInt(req.body.instructor_id);
         const title = (req.body.title || '').toString().trim() || 'Lesson Video';
 
+        console.log('Video upload request received:', { courseId, instructorId, title, hasFile: !!req.file });
+
         if (!courseId) {
             return res.status(400).json({ error: 'Valid course_id is required' });
         }
 
         if (!req.file) {
+            console.error('Video upload failed: No file provided');
             return res.status(400).json({ error: 'Video file is required' });
         }
+
+        console.log('File received:', { originalName: req.file.originalname, size: req.file.size, mimetype: req.file.mimetype, path: req.file.path });
 
         const [courseRows] = await db.query(
             `SELECT id, instructor_id, title, expiry_date
@@ -1707,30 +1737,39 @@ app.post(['/videos/upload', '/api/videos/upload', '/api/course-videos'], upload.
         );
 
         if (courseRows.length === 0) {
+            console.error(`Course not found: ${courseId}`);
             return res.status(404).json({ error: 'Course not found' });
         }
 
         const course = courseRows[0];
         if (instructorId && Number(course.instructor_id) !== Number(instructorId)) {
+            console.error(`Permission denied: instructor ${instructorId} cannot upload to course ${courseId} (owner: ${course.instructor_id})`);
             return res.status(403).json({ error: 'You can only upload videos to your own courses' });
         }
 
         if (getCourseLifecycleStatus(course.expiry_date) === 'Expired') {
+            console.error(`Course expired: ${courseId}`);
             return res.status(400).json({ error: 'This course has expired and can no longer accept uploads' });
         }
 
+        console.log('Starting Cloudinary upload for file:', req.file.path);
         const uploadedVideo = await uploadVideoAsset(req.file.path);
         const videoUrl = uploadedVideo.secure_url || uploadedVideo.url;
+        console.log('Cloudinary upload successful:', { videoUrl, publicId: uploadedVideo.public_id });
+
         const createdAt = new Date();
         let videoId = null;
 
         try {
             videoId = await insertVideoRecord(courseId, title, videoUrl, createdAt);
+            console.log('Video record inserted:', { videoId, courseId, title });
         } catch (dbError) {
+            console.error('Database insert error, cleaning up Cloudinary asset:', dbError);
             await deleteVideoAssetByUrl(videoUrl);
             throw dbError;
         }
 
+        console.log('Video upload completed successfully:', { videoId, courseId });
         return res.status(201).json({
             message: 'Video uploaded successfully',
             video: {
@@ -1746,9 +1785,13 @@ app.post(['/videos/upload', '/api/videos/upload', '/api/course-videos'], upload.
     } catch (error) {
         console.error('Course video upload error:', error);
         const status = String(error.message || '').includes('Cloudinary upload is unavailable') ? 503 : 500;
+        const errorMessage = status === 503 
+            ? (error.message || 'Cloudinary upload is unavailable. Please check your .env file for CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.')
+            : 'Failed to upload video. Please try again or contact support.';
         return res.status(status).json({
-            error: status === 503 ? (error.message || 'Cloudinary upload is unavailable') : 'Failed to upload video',
-            details: error.message || 'Unknown upload error'
+            error: errorMessage,
+            details: error.message || 'Unknown upload error',
+            type: error.constructor.name
         });
     }
 });

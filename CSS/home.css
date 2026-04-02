@@ -2119,12 +2119,39 @@ html[data-theme="light"] .history-card-instructor strong {
 html[data-theme="light"] .profile-form input,
 html[data-theme="light"] .modal-form input,
 html[data-theme="light"] .course-modal-meta,
+html[data-theme="light"] .ghost-btn,
+html[data-theme="light"] .course-actions .videos-btn,
+html[data-theme="light"] .course-action-btn.ghost,
+html[data-theme="light"] .modal-btn.ghost,
 html[data-theme="light"] .drawer-close,
 html[data-theme="light"] .context-close-btn,
-html[data-theme="light"] .btn-secondary {
+html[data-theme="light"] .btn-secondary,
+html[data-theme="light"] .course-modal-close {
   background: rgba(226, 238, 255, 0.6);
   border-color: rgba(96, 165, 250, 0.16);
   color: var(--text);
+}
+
+html[data-theme="light"] .ghost-btn:hover,
+html[data-theme="light"] .course-actions .videos-btn:hover,
+html[data-theme="light"] .course-action-btn.ghost:hover,
+html[data-theme="light"] .modal-btn.ghost:hover,
+html[data-theme="light"] .drawer-close:hover,
+html[data-theme="light"] .context-close-btn:hover,
+html[data-theme="light"] .btn-secondary:hover,
+html[data-theme="light"] .course-modal-close:hover {
+  background: rgba(191, 219, 254, 0.52);
+  border-color: rgba(96, 165, 250, 0.22);
+}
+
+html[data-theme="light"] .danger-btn {
+  background: rgba(254, 226, 226, 0.92);
+  border-color: rgba(239, 68, 68, 0.24);
+  color: #b91c1c;
+}
+
+html[data-theme="light"] .danger-btn:hover {
+  background: rgba(254, 202, 202, 0.96);
 }
 
 html[data-theme="light"] .course-modal-expiry {

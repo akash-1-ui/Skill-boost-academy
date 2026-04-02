@@ -11,6 +11,7 @@ function initAddCoursePage() {
   const coverEditHint = document.getElementById('coverEditHint');
   const submitBtn = document.getElementById('courseSubmitBtn');
   const uploadSubmitBtn = document.getElementById('uploadVideoBtn') || uploadForm?.querySelector('button');
+  const uploadSubmitBtnDefaultLabel = uploadSubmitBtn?.textContent?.trim() || 'Upload Video';
   const courseStatusEl = document.getElementById('courseFormStatus');
   const uploadStatusEl = document.getElementById('uploadVideoStatus');
   const uploadProgressEl = document.getElementById('uploadVideoProgress');
@@ -24,6 +25,8 @@ function initAddCoursePage() {
   let pendingCourseId = null;
   let isVideoUploadInProgress = false;
   const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024;
+  const UPLOAD_STATE_STORAGE_KEY = 'skillboost:video-upload-state';
+  const UPLOAD_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
   const instructorId = localStorage.getItem('instructorId');
   if (!instructorId) {
@@ -43,8 +46,8 @@ function initAddCoursePage() {
   }
 
   if (uploadForm) {
-    uploadForm.setAttribute('action', 'javascript:void(0)');
-    uploadForm.setAttribute('method', 'post');
+    uploadForm.noValidate = true;
+    uploadForm.setAttribute('novalidate', 'novalidate');
   }
 
   if (uploadSubmitBtn) {
@@ -115,6 +118,134 @@ function initAddCoursePage() {
     if (uploadProgressBarEl) {
       uploadProgressBarEl.setAttribute('aria-valuenow', String(normalizedPercent));
     }
+  }
+
+  function getUploadProgressPercent() {
+    const numericPercent = Number.parseInt(String(uploadProgressPercentEl?.textContent || '0').replace(/[^\d]/g, ''), 10);
+    return Number.isFinite(numericPercent) ? numericPercent : 0;
+  }
+
+  function scrollUploadFeedbackIntoView() {
+    const target = uploadStatusEl || uploadProgressEl;
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  function rememberUploadState(overrides = {}) {
+    if (!uploadForm) {
+      return;
+    }
+
+    const lessonTitleInput = document.getElementById('lessonTitle');
+    const rawPercent = overrides.percent ?? getUploadProgressPercent();
+    const normalizedPercent = Math.max(0, Math.min(100, Math.round(Number(rawPercent) || 0)));
+    const payload = {
+      type: overrides.type ?? '',
+      message: overrides.message ?? String(uploadStatusEl?.textContent || '').trim(),
+      percent: normalizedPercent,
+      label: overrides.label ?? String(uploadProgressLabelEl?.textContent || '').trim(),
+      complete: Boolean(overrides.complete),
+      inProgress: Boolean(overrides.inProgress),
+      selectedCourse: String(overrides.selectedCourse ?? courseSelect?.value ?? ''),
+      lessonTitle: overrides.lessonTitle ?? lessonTitleInput?.value?.trim?.() ?? '',
+      updatedAt: Date.now()
+    };
+
+    try {
+      window.sessionStorage.setItem(UPLOAD_STATE_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.warn('Unable to persist upload UI state:', error);
+    }
+  }
+
+  function clearUploadState() {
+    try {
+      window.sessionStorage.removeItem(UPLOAD_STATE_STORAGE_KEY);
+    } catch (error) {
+      console.warn('Unable to clear upload UI state:', error);
+    }
+  }
+
+  function restoreUploadState() {
+    if (!uploadForm) {
+      return;
+    }
+
+    let storedState = null;
+
+    try {
+      const serializedState = window.sessionStorage.getItem(UPLOAD_STATE_STORAGE_KEY);
+      storedState = serializedState ? JSON.parse(serializedState) : null;
+    } catch (error) {
+      console.warn('Unable to restore upload UI state:', error);
+      clearUploadState();
+      return;
+    }
+
+    if (!storedState) {
+      return;
+    }
+
+    if (Date.now() - Number(storedState.updatedAt || 0) > UPLOAD_STATE_MAX_AGE_MS) {
+      clearUploadState();
+      return;
+    }
+
+    if (storedState.selectedCourse) {
+      pendingCourseId = String(storedState.selectedCourse);
+      applyPendingSelection();
+    }
+
+    const lessonTitleInput = document.getElementById('lessonTitle');
+    if (lessonTitleInput && storedState.lessonTitle && !lessonTitleInput.value) {
+      lessonTitleInput.value = storedState.lessonTitle;
+    }
+
+    const wasInterrupted = Boolean(storedState.inProgress);
+    const restoredPercent = Math.max(0, Math.min(100, Math.round(Number(storedState.percent) || 0)));
+    const restoredLabel = wasInterrupted
+      ? 'Upload interrupted'
+      : (storedState.label || 'Preparing upload...');
+    const restoredMessage = wasInterrupted
+      ? 'The page refreshed before the upload finished, so the lesson was not uploaded. Please try again.'
+      : storedState.message;
+
+    if (restoredLabel || restoredPercent > 0 || wasInterrupted || storedState.complete) {
+      setUploadProgress(
+        wasInterrupted ? Math.min(restoredPercent, 97) : restoredPercent,
+        restoredLabel,
+        { complete: Boolean(storedState.complete) && !wasInterrupted }
+      );
+    }
+
+    if (restoredMessage) {
+      setFormStatus(uploadStatusEl, wasInterrupted ? 'error' : (storedState.type || 'info'), restoredMessage);
+    }
+
+    if (wasInterrupted) {
+      rememberUploadState({
+        type: 'error',
+        message: restoredMessage,
+        percent: Math.min(restoredPercent, 97),
+        label: restoredLabel,
+        complete: false,
+        inProgress: false,
+        selectedCourse: storedState.selectedCourse,
+        lessonTitle: storedState.lessonTitle
+      });
+      scrollUploadFeedbackIntoView();
+    }
+  }
+
+  function handleUploadBeforeUnload(event) {
+    if (!isVideoUploadInProgress) {
+      return;
+    }
+
+    rememberUploadState({ inProgress: true });
+    event.preventDefault();
+    event.returnValue = 'A lesson upload is still in progress.';
   }
 
   function applyPendingSelection() {
@@ -192,6 +323,12 @@ function initAddCoursePage() {
   window.openCourseEditor = (course) => {
     setEditMode(course);
   };
+
+  restoreUploadState();
+
+  if (uploadForm) {
+    window.addEventListener('beforeunload', handleUploadBeforeUnload);
+  }
 
   async function readApiPayload(response) {
     const contentType = response.headers.get('content-type') || '';
@@ -430,36 +567,90 @@ function initAddCoursePage() {
     try {
       isVideoUploadInProgress = true;
       const selectedCourse = courseSelect?.value;
-      const lessonTitle = document.getElementById('lessonTitle').value.trim();
-      const lessonVideo = document.getElementById('lessonVideo').files[0];
+      const lessonTitleInput = document.getElementById('lessonTitle');
+      const lessonVideoInput = document.getElementById('lessonVideo');
+      const lessonTitle = lessonTitleInput?.value.trim() || '';
+      const lessonVideo = lessonVideoInput?.files?.[0];
 
+      // Validation with proper error display (no resetUploadProgress!)
       if (!selectedCourse) {
-        resetUploadProgress();
         setFormStatus(uploadStatusEl, 'error', 'Please select a course.');
+        rememberUploadState({
+          type: 'error',
+          message: 'Please select a course.',
+          percent: 0,
+          label: 'Upload not started',
+          complete: false,
+          inProgress: false,
+          selectedCourse,
+          lessonTitle
+        });
+        scrollUploadFeedbackIntoView();
         return;
       }
 
       if (!lessonVideo) {
-        resetUploadProgress();
         setFormStatus(uploadStatusEl, 'error', 'Please select a video file to upload.');
+        rememberUploadState({
+          type: 'error',
+          message: 'Please select a video file to upload.',
+          percent: 0,
+          label: 'Upload not started',
+          complete: false,
+          inProgress: false,
+          selectedCourse,
+          lessonTitle
+        });
+        scrollUploadFeedbackIntoView();
         return;
       }
 
       if (lessonVideo.type && !lessonVideo.type.startsWith('video/')) {
-        resetUploadProgress();
         setFormStatus(uploadStatusEl, 'error', `Please upload a valid video file. Selected type: ${lessonVideo.type}`);
+        rememberUploadState({
+          type: 'error',
+          message: `Please upload a valid video file. Selected type: ${lessonVideo.type}`,
+          percent: 0,
+          label: 'Upload not started',
+          complete: false,
+          inProgress: false,
+          selectedCourse,
+          lessonTitle
+        });
+        scrollUploadFeedbackIntoView();
         return;
       }
 
       if (lessonVideo.size > MAX_VIDEO_SIZE_BYTES) {
-        resetUploadProgress();
         setFormStatus(uploadStatusEl, 'error', 'Video upload failed: file size exceeds the 100MB limit.');
+        rememberUploadState({
+          type: 'error',
+          message: 'Video upload failed: file size exceeds the 100MB limit.',
+          percent: 0,
+          label: 'Upload not started',
+          complete: false,
+          inProgress: false,
+          selectedCourse,
+          lessonTitle
+        });
+        scrollUploadFeedbackIntoView();
         return;
       }
 
-      setFormStatus(uploadStatusEl, 'info', 'Preparing upload... 0% complete');
+      // Show progress UI and clear previous errors
       resetUploadProgress();
+      setFormStatus(uploadStatusEl, 'info', 'Preparing upload... 0% complete');
       setUploadProgress(0, 'Preparing upload...');
+      rememberUploadState({
+        type: 'info',
+        message: 'Preparing upload... 0% complete',
+        percent: 0,
+        label: 'Preparing upload...',
+        complete: false,
+        inProgress: true,
+        selectedCourse,
+        lessonTitle
+      });
 
       const formData = new FormData(uploadForm);
       formData.set('course_id', selectedCourse);
@@ -470,18 +661,51 @@ function initAddCoursePage() {
 
       if (uploadSubmitBtn) {
         uploadSubmitBtn.disabled = true;
-        uploadSubmitBtn.textContent = 'Uploading... 0%';
+        uploadSubmitBtn.setAttribute('aria-busy', 'true');
       }
 
       // Use XMLHttpRequest to track upload progress
       const xhr = new XMLHttpRequest();
+      let uploadTimeout = null;
+      let didTimeout = false;
+      const UPLOAD_TIMEOUT_MS = 60000; // 60 seconds timeout
+
+      const clearUploadTimeout = () => {
+        if (uploadTimeout) {
+          clearTimeout(uploadTimeout);
+          uploadTimeout = null;
+        }
+      };
+
+      const armUploadTimeout = () => {
+        clearUploadTimeout();
+        uploadTimeout = setTimeout(() => {
+          didTimeout = true;
+          console.error('Upload timeout after', UPLOAD_TIMEOUT_MS, 'ms');
+          xhr.abort();
+        }, UPLOAD_TIMEOUT_MS);
+      };
 
       xhr.upload.addEventListener('loadstart', () => {
         setUploadProgress(0, 'Starting upload...');
         setFormStatus(uploadStatusEl, 'info', 'Starting upload... 0% complete');
+        rememberUploadState({
+          type: 'info',
+          message: 'Starting upload... 0% complete',
+          percent: 0,
+          label: 'Starting upload...',
+          complete: false,
+          inProgress: true,
+          selectedCourse,
+          lessonTitle
+        });
+        console.log('Upload started for video:', lessonVideo.name, 'Size:', lessonVideo.size);
+        armUploadTimeout();
       });
 
       xhr.upload.addEventListener('progress', (event) => {
+        armUploadTimeout();
+
         if (event.lengthComputable) {
           const rawPercent = Math.round((event.loaded / event.total) * 100);
           const percentComplete = Math.min(rawPercent, 95);
@@ -491,43 +715,84 @@ function initAddCoursePage() {
 
           setUploadProgress(percentComplete, percentComplete >= 95 ? 'Processing video...' : 'Uploading video...');
           setFormStatus(uploadStatusEl, 'info', statusMessage);
-          if (uploadSubmitBtn) {
-            uploadSubmitBtn.textContent = `Uploading... ${percentComplete}%`;
-          }
+          rememberUploadState({
+            type: 'info',
+            message: statusMessage,
+            percent: percentComplete,
+            label: percentComplete >= 95 ? 'Processing video...' : 'Uploading video...',
+            complete: false,
+            inProgress: true,
+            selectedCourse,
+            lessonTitle
+          });
         }
       });
 
       xhr.upload.addEventListener('load', () => {
+        armUploadTimeout();
         setUploadProgress(97, 'Finalizing lesson...');
         setFormStatus(uploadStatusEl, 'info', 'Upload received. Finalizing lesson... 97% complete');
+        rememberUploadState({
+          type: 'info',
+          message: 'Upload received. Finalizing lesson... 97% complete',
+          percent: 97,
+          label: 'Finalizing lesson...',
+          complete: false,
+          inProgress: true,
+          selectedCourse,
+          lessonTitle
+        });
         if (uploadSubmitBtn) {
-          uploadSubmitBtn.textContent = 'Finalizing...';
+          uploadSubmitBtn.setAttribute('aria-busy', 'true');
         }
       });
 
       const uploadPromise = new Promise((resolve, reject) => {
         xhr.addEventListener('load', () => {
+          clearUploadTimeout();
+          console.log('XHR load event, status:', xhr.status);
           resolve({ status: xhr.status, data: parseXhrPayload(xhr) });
         });
 
         xhr.addEventListener('error', () => {
+          clearUploadTimeout();
+          console.error('XHR error event');
           reject(new Error('Network error during upload'));
         });
 
         xhr.addEventListener('abort', () => {
-          reject(new Error('Upload aborted'));
+          clearUploadTimeout();
+          console.error('XHR abort event');
+          reject(new Error(didTimeout ? `Upload timed out after ${UPLOAD_TIMEOUT_MS / 1000} seconds` : 'Upload aborted'));
         });
 
         xhr.open('POST', 'http://localhost:3000/videos/upload');
+        xhr.setRequestHeader('Accept', 'application/json');
+        armUploadTimeout();
+        console.log('Sending video upload request to http://localhost:3000/videos/upload');
         xhr.send(formData);
       });
 
       const { status, data } = await uploadPromise;
 
+      console.log('Upload response received, status:', status, 'data:', data);
+
       if (status < 200 || status >= 300) {
         const failureMessage = buildFailureReason({ ok: false, status }, data, 'Video upload failed. Please try again.');
-        resetUploadProgress();
+        console.error('Upload failed with message:', failureMessage);
+        setUploadProgress(Math.max(getUploadProgressPercent(), 1), 'Upload failed');
         setFormStatus(uploadStatusEl, 'error', failureMessage);
+        rememberUploadState({
+          type: 'error',
+          message: failureMessage,
+          percent: Math.max(getUploadProgressPercent(), 1),
+          label: 'Upload failed',
+          complete: false,
+          inProgress: false,
+          selectedCourse,
+          lessonTitle
+        });
+        scrollUploadFeedbackIntoView();
         return;
       }
 
@@ -548,13 +813,18 @@ function initAddCoursePage() {
 
       setUploadProgress(100, 'Upload complete', { complete: true });
       setFormStatus(uploadStatusEl, 'success', successMessage);
+      rememberUploadState({
+        type: 'success',
+        message: successMessage,
+        percent: 100,
+        label: 'Upload complete',
+        complete: true,
+        inProgress: false,
+        selectedCourse,
+        lessonTitle: ''
+      });
+      scrollUploadFeedbackIntoView();
 
-      if (uploadStatusEl) {
-        uploadStatusEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-
-      const lessonTitleInput = document.getElementById('lessonTitle');
-      const lessonVideoInput = document.getElementById('lessonVideo');
       if (lessonTitleInput) {
         lessonTitleInput.value = '';
       }
@@ -572,17 +842,31 @@ function initAddCoursePage() {
       // Keep the success message visible for 3 seconds before updating dashboard
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('instructor:courseChanged'));
-      }, 2000);
+      }, 3000);
     } catch (error) {
       console.error('Video upload error:', error);
-      const message = buildNetworkFailureReason('upload the video');
-      resetUploadProgress();
+      const message = error.message === 'Upload aborted' 
+        ? buildNetworkFailureReason('complete the upload')
+        : error.message.includes('timeout')
+          ? 'Video upload timed out. Please check your internet connection and try again.'
+          : buildNetworkFailureReason('upload the video');
+      setUploadProgress(Math.max(getUploadProgressPercent(), 1), error.message.includes('timeout') ? 'Upload timed out' : 'Upload failed');
       setFormStatus(uploadStatusEl, 'error', message);
+      rememberUploadState({
+        type: 'error',
+        message,
+        percent: Math.max(getUploadProgressPercent(), 1),
+        label: error.message.includes('timeout') ? 'Upload timed out' : 'Upload failed',
+        complete: false,
+        inProgress: false
+      });
+      scrollUploadFeedbackIntoView();
     } finally {
       isVideoUploadInProgress = false;
       if (uploadSubmitBtn) {
         uploadSubmitBtn.disabled = false;
-        uploadSubmitBtn.textContent = 'Upload Video';
+        uploadSubmitBtn.removeAttribute('aria-busy');
+        uploadSubmitBtn.textContent = uploadSubmitBtnDefaultLabel;
       }
     }
   }
