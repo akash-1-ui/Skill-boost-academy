@@ -22,9 +22,9 @@ function persistSession(session) {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
 }
 
-export function getHomePathForRole(role) {
+export function getHomePathForRole(role, organization = null) {
     if (role === 'principal') {
-        return '/principal/dashboard';
+        return organization?.subscription_expired ? '/principal/subscription' : '/principal/dashboard';
     }
     if (role === 'instructor') {
         return '/instructor/dashboard';
@@ -86,12 +86,7 @@ export function AuthProvider({ children }) {
         setSession(nextSession);
     };
 
-    const login = async (credentials) => {
-        const payload = await apiRequest('/auth/login', {
-            method: 'POST',
-            body: credentials
-        });
-
+    const establishSession = (payload) => {
         const nextSession = {
             token: payload.token,
             user: payload.user,
@@ -105,23 +100,22 @@ export function AuthProvider({ children }) {
         return nextSession;
     };
 
+    const login = async (credentials) => {
+        const payload = await apiRequest('/auth/login', {
+            method: 'POST',
+            body: credentials
+        });
+
+        return establishSession(payload);
+    };
+
     const register = async (details) => {
         const payload = await apiRequest('/auth/register', {
             method: 'POST',
             body: details
         });
 
-        const nextSession = {
-            token: payload.token,
-            user: payload.user,
-            organization: payload.organization
-        };
-
-        startTransition(() => {
-            saveSession(nextSession);
-        });
-
-        return nextSession;
+        return establishSession(payload);
     };
 
     const refreshSession = async () => {
@@ -159,6 +153,7 @@ export function AuthProvider({ children }) {
                 booting,
                 login,
                 register,
+                establishSession,
                 refreshSession,
                 logout
             }}

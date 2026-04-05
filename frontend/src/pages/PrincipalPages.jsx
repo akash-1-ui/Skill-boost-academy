@@ -24,6 +24,55 @@ function formatCurrency(amount, currency = 'INR') {
     }).format((Number(amount) || 0) / 100);
 }
 
+function formatDateTime(value) {
+    if (!value) {
+        return '-';
+    }
+
+    const parsedDate = new Date(value);
+    if (Number.isNaN(parsedDate.getTime())) {
+        return String(value);
+    }
+
+    return new Intl.DateTimeFormat('en-IN', {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+    }).format(parsedDate);
+}
+
+function formatSeatValue(usage) {
+    if (!usage) {
+        return '-';
+    }
+
+    if (usage.limit === null || usage.limit === undefined) {
+        return `${usage.current} / Unlimited`;
+    }
+
+    return `${usage.current} / ${usage.limit}`;
+}
+
+async function copyToClipboard(value) {
+    if (!value) {
+        throw new Error('Missing text to copy');
+    }
+
+    if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'absolute';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+}
+
 function useProtectedLoader(path) {
     const { token } = useAuth();
     const [state, setState] = useState({ loading: true, data: null, error: '' });
@@ -52,8 +101,56 @@ function useProtectedLoader(path) {
     return state;
 }
 
+function UsageCard({ usage }) {
+    const toneClass = usage.exceeded ? ' exceeded' : (usage.near_limit ? ' warning' : '');
+    const meterWidth = usage.limit === null || usage.limit === undefined
+        ? '0%'
+        : `${Math.min(usage.percentage || 0, 100)}%`;
+
+    return (
+        <div className={`usage-card${toneClass}`}>
+            <div className="usage-card-head">
+                <div>
+                    <span>{usage.label} Seats</span>
+                    <strong>{formatSeatValue(usage)}</strong>
+                </div>
+                <span className={`status-pill ${usage.exceeded ? 'danger' : (usage.near_limit ? 'neutral' : 'success')}`}>
+                    {usage.exceeded ? 'Full' : (usage.near_limit ? 'Near Limit' : 'Available')}
+                </span>
+            </div>
+            <div className="usage-meter" aria-hidden="true">
+                <span style={{ width: meterWidth }} />
+            </div>
+            <p>
+                {usage.limit === null || usage.limit === undefined
+                    ? `${usage.current} ${usage.label.toLowerCase()} accounts are active on an unlimited plan.`
+                    : `${usage.remaining} seats remaining before the ${usage.label.toLowerCase()} cap is reached.`}
+            </p>
+        </div>
+    );
+}
+
+function InviteLinkCard({ label, description, url, copied, onCopy }) {
+    return (
+        <div className="invite-link-card">
+            <div className="usage-card-head">
+                <div>
+                    <span>{label}</span>
+                    <strong>{copied ? 'Copied' : 'Invite Link'}</strong>
+                </div>
+                <button type="button" className="secondary-btn" onClick={onCopy}>
+                    {copied ? 'Copied' : 'Copy Link'}
+                </button>
+            </div>
+            <p>{description}</p>
+            <div className="invite-link-url">{url}</div>
+        </div>
+    );
+}
+
 export function PrincipalDashboardPage() {
     const { data, loading, error } = useProtectedLoader('/principal/dashboard');
+    const [copyState, setCopyState] = useState({ key: '', tone: 'info', message: '' });
 
     if (loading) {
         return <LoadingBlock label="Loading principal analytics..." />;
@@ -67,26 +164,143 @@ export function PrincipalDashboardPage() {
         responsive: true,
         plugins: { legend: { display: false } }
     };
+    const inviteLinks = data.invite_links || data.organization.invite_links || {};
+
+    const handleCopyInvite = async (key, url) => {
+        try {
+            await copyToClipboard(url);
+            setCopyState({
+                key,
+                tone: 'success',
+                message: `${key === 'student' ? 'Student' : 'Instructor'} invite link copied successfully.`
+            });
+        } catch (copyError) {
+            setCopyState({
+                key,
+                tone: 'danger',
+                message: 'Unable to copy the invite link. Please copy it manually.'
+            });
+        }
+    };
 
     return (
         <>
             <PageHeader
                 eyebrow="Principal Dashboard"
                 title="Organization analytics at a glance"
-                description="Track campus adoption, enrollments, and video activity with tenant-safe reporting."
+                description="Track campus adoption, enrollments, seat usage, and invite-based onboarding from one secure tenant workspace."
             />
 
             <SectionCard
                 title={data.organization.college_name}
-                subtitle={`Access code ${data.organization.access_code} • Expires ${data.organization.expiry_date || 'Not active yet'}`}
+                subtitle={`Academy ID ${data.organization.academy_id || '-'} | Access code ${data.organization.access_code} | Expires ${data.organization.expiry_date || 'Not active yet'}`}
+                aside={data.current_plan ? <span className="status-pill neutral">{data.current_plan.plan_name}</span> : null}
             >
                 <StatGrid
                     items={[
                         { label: 'Students', value: data.statistics.total_students, helper: 'Active learner accounts' },
                         { label: 'Instructors', value: data.statistics.total_instructors, helper: 'Teaching seats used' },
-                        { label: 'Courses', value: data.statistics.total_courses, helper: 'Courses in this tenant' },
+                        { label: 'Courses', value: data.statistics.total_courses, helper: 'Courses in this academy' },
                         { label: 'Videos', value: data.statistics.total_videos, helper: 'Uploaded learning assets' }
                     ]}
+                />
+            </SectionCard>
+
+            <SectionCard
+                title="Seat Usage And Access Control"
+                subtitle="Monitor seat consumption, warning thresholds, and academy invite readiness."
+            >
+                <div className="usage-grid">
+                    <UsageCard usage={data.usage.instructors} />
+                    <UsageCard usage={data.usage.students} />
+                </div>
+
+                {data.warnings.length ? (
+                    data.warnings.map((warning) => (
+                        <Notice key={warning} tone="warning">{warning}</Notice>
+                    ))
+                ) : (
+                    <Notice tone="success">Instructor and student capacity are both available for new registrations.</Notice>
+                )}
+            </SectionCard>
+
+            <SectionCard
+                title="Invite Links"
+                subtitle="Share academy-safe onboarding links that already include the correct access code and registration role."
+            >
+                <div className="invite-link-grid">
+                    <InviteLinkCard
+                        label="Instructor Invite"
+                        description="Use this link when onboarding a new instructor into the academy."
+                        url={inviteLinks.instructor || '-'}
+                        copied={copyState.key === 'instructor' && copyState.tone === 'success'}
+                        onCopy={() => handleCopyInvite('instructor', inviteLinks.instructor)}
+                    />
+                    <InviteLinkCard
+                        label="Student Invite"
+                        description="Use this link when sharing registration access with students."
+                        url={inviteLinks.student || '-'}
+                        copied={copyState.key === 'student' && copyState.tone === 'success'}
+                        onCopy={() => handleCopyInvite('student', inviteLinks.student)}
+                    />
+                </div>
+
+                {copyState.message ? <Notice tone={copyState.tone}>{copyState.message}</Notice> : null}
+            </SectionCard>
+
+            <SectionCard
+                title="Registration Attempts"
+                subtitle="Track rejected signups so you can react before seat limits become a support issue."
+            >
+                <StatGrid
+                    items={[
+                        {
+                            label: 'Rejected Total',
+                            value: data.exceeded_attempts.total,
+                            helper: 'All failed registration attempts'
+                        },
+                        {
+                            label: 'Instructor Blocks',
+                            value: data.exceeded_attempts.instructor,
+                            helper: 'Rejected because instructor seats were full'
+                        },
+                        {
+                            label: 'Student Blocks',
+                            value: data.exceeded_attempts.student,
+                            helper: 'Rejected because student seats were full'
+                        },
+                        {
+                            label: 'Current Plan',
+                            value: data.current_plan?.plan_name || 'Pending',
+                            helper: data.current_plan
+                                ? `${formatCurrency(data.current_plan.amount)} latest charge`
+                                : 'No paid plan recorded yet'
+                        }
+                    ]}
+                />
+
+                <DataTable
+                    columns={[
+                        {
+                            key: 'requested_role',
+                            header: 'Role',
+                            render: (row) => String(row.requested_role || '').replace(/^./, (value) => value.toUpperCase())
+                        },
+                        { key: 'email', header: 'Email' },
+                        {
+                            key: 'reason',
+                            header: 'Reason',
+                            render: (row) => String(row.reason || '').replaceAll('_', ' ')
+                        },
+                        { key: 'message', header: 'Message' },
+                        {
+                            key: 'created_at',
+                            header: 'Attempted',
+                            render: (row) => formatDateTime(row.created_at)
+                        }
+                    ]}
+                    rows={data.exceeded_attempts.recent}
+                    emptyMessage="No rejected registration attempts have been recorded."
                 />
             </SectionCard>
 
@@ -152,7 +366,7 @@ export function PrincipalDashboardPage() {
                         { key: 'plan_name', header: 'Plan' },
                         { key: 'amount', header: 'Amount', render: (row) => formatCurrency(row.amount) },
                         { key: 'status', header: 'Status' },
-                        { key: 'created_at', header: 'Created' }
+                        { key: 'created_at', header: 'Created', render: (row) => formatDateTime(row.created_at) }
                     ]}
                     rows={data.recent_payments}
                     emptyMessage="No payments recorded yet."
@@ -430,7 +644,7 @@ export function PrincipalSubscriptionPage() {
 
             <SectionCard
                 title={state.data.organization.college_name}
-                subtitle={`Status: ${state.data.organization.subscription_status} • Expiry: ${state.data.organization.expiry_date || 'Not active yet'}`}
+                subtitle={`Status: ${state.data.organization.subscription_status} | Expiry: ${state.data.organization.expiry_date || 'Not active yet'}`}
             >
                 <StatGrid
                     items={[
@@ -446,7 +660,7 @@ export function PrincipalSubscriptionPage() {
                         key={plan.id}
                         className="plan-card"
                         title={plan.name}
-                        subtitle={`${formatCurrency(plan.amount, plan.currency)} • ${plan.duration_label}`}
+                        subtitle={`${formatCurrency(plan.amount, plan.currency)} | ${plan.duration_label}`}
                         aside={<span className="status-pill neutral">{plan.id}</span>}
                     >
                         <div className="plan-meta">
@@ -472,7 +686,7 @@ export function PrincipalSubscriptionPage() {
                         { key: 'amount', header: 'Amount', render: (row) => formatCurrency(row.amount, row.currency) },
                         { key: 'status', header: 'Status' },
                         { key: 'payment_id', header: 'Payment ID' },
-                        { key: 'created_at', header: 'Created' }
+                        { key: 'created_at', header: 'Created', render: (row) => formatDateTime(row.created_at) }
                     ]}
                     rows={state.data.payments}
                     emptyMessage="No subscription payments recorded yet."
@@ -508,7 +722,7 @@ export function PrincipalPaymentsPage() {
                         { key: 'provider', header: 'Provider' },
                         { key: 'status', header: 'Status' },
                         { key: 'payment_id', header: 'Payment ID' },
-                        { key: 'created_at', header: 'Created' }
+                        { key: 'created_at', header: 'Created', render: (row) => formatDateTime(row.created_at) }
                     ]}
                     rows={data.payments}
                     emptyMessage="No payments have been recorded."

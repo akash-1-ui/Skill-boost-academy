@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skill Boost Nexus Owner Dashboard</title>
+    <script>
+        (() => {
+            try {
+                const theme = localStorage.getItem('skillboost-theme-access') === 'dark' ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme-role', 'access');
+            } catch (error) {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.documentElement.setAttribute('data-theme-role', 'access');
+            }
+        })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../CSS/access.css">
+</head>
+<body class="dashboard-mode" data-app-role="access">
+    <nav class="topbar" id="portalTopbar">
+        <div class="topbar-inner">
+            <a class="brand" href="index.html">Skill Boost Nexus</a>
+            <div class="topbar-actions">
+                <a id="workspaceLink" class="topbar-link" href="index.html">Workspace</a>
+                <button
+                    type="button"
+                    class="theme-toggle"
+                    id="dashboardThemeToggle"
+                    data-theme-toggle
+                    data-theme-role="access">
+                    <span class="theme-toggle-track" aria-hidden="true">
+                        <span class="theme-toggle-thumb"></span>
+                    </span>
+                    <span class="theme-toggle-text" data-theme-label>Day Mode</span>
+                </button>
+                <button id="refreshDashboardButton" type="button" class="topbar-btn secondary">Refresh</button>
+                <div class="quick-access-launcher topbar-quick-access">
+                    <button
+                        id="quickAccessToggle"
+                        type="button"
+                        class="quick-access-toggle"
+                        aria-expanded="false"
+                        aria-controls="quickAccessMenu"
+                        aria-haspopup="true"
+                        title="Quick Access">
+                        <span class="quick-access-toggle-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z"></path>
+                            </svg>
+                        </span>
+                        <span class="visually-hidden">Open quick access</span>
+                    </button>
+
+                    <div id="quickAccessMenu" class="quick-access-menu" hidden>
+                        <div class="quick-access-menu-header">
+                            <p class="eyebrow">Quick Access</p>
+                            <p>Jump to any dashboard container.</p>
+                        </div>
+
+                        <div class="quick-access-links">
+                            <button type="button" class="quick-access-link" data-scroll-target="dashboardOverviewSection">Dashboard Overview</button>
+                            <button type="button" class="quick-access-link" data-scroll-target="dashboardCodeSection">Academy Access Code</button>
+                            <button type="button" class="quick-access-link" data-scroll-target="dashboardCapacitySection">Capacity &amp; Usage</button>
+                            <button type="button" class="quick-access-link" data-scroll-target="dashboardJoinLinkSection">Academy Join Link</button>
+                            <button type="button" class="quick-access-link" data-scroll-target="dashboardPlansSection">Subscription Plans</button>
+                            <button type="button" class="quick-access-link" data-scroll-target="dashboardPaymentsSection">Payment History</button>
+                            <button type="button" class="quick-access-link" data-scroll-target="dashboardDangerSection">Terminate Account</button>
+                        </div>
+                    </div>
+                </div>
+                <button id="logoutButton" type="button" class="topbar-btn logout-btn">Sign Out</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section id="dashboardSection" class="dashboard-shell" tabindex="-1">
+            <div class="dashboard-toolbar">
+                <div>
+                    <p class="eyebrow">Owner Dashboard</p>
+                    <h2 id="dashboardTitle">Academy dashboard</h2>
+                    <p id="dashboardSubtitle">Manage access, subscription plans, payment history, and invite access from one place.</p>
+                </div>
+            </div>
+
+            <div id="dashboardNotice" class="notice info" hidden></div>
+
+            <div id="dashboardOverviewSection" class="info-grid quick-access-target">
+                <article class="surface info-card">
+                    <span class="info-label">Academy Name</span>
+                    <strong id="academyNameValue" class="info-value">-</strong>
+                </article>
+
+                <article class="surface info-card">
+                    <span class="info-label">Owner</span>
+                    <strong id="ownerNameValue" class="info-value">-</strong>
+                    <small id="ownerEmailValue">-</small>
+                </article>
+
+                <article class="surface info-card">
+                    <span class="info-label">Current Plan</span>
+                    <strong id="currentPlanValue" class="info-value">No active plan</strong>
+                    <small id="planLimitsValue">Choose a plan below</small>
+                </article>
+            </div>
+
+            <section id="dashboardCodeSection" class="surface quick-access-card quick-access-target">
+                <div class="access-code-group">
+                    <div>
+                        <span class="access-label">Academy Access Code</span>
+                        <p class="access-desc">Share this unique code with students and instructors to join your academy</p>
+                    </div>
+                    <div class="access-code-display">
+                        <strong id="quickAccessCodeValue">-</strong>
+                        <button type="button" class="chip-btn copy-code-btn" data-copy-target="quickAccessCodeValue">Copy Code</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="dashboardCapacitySection" class="surface capacity-section quick-access-target">
+                <div class="section-header">
+                    <h3>Capacity & Usage</h3>
+                    <p>Monitor your current instructor and student seat usage</p>
+                </div>
+
+                <div class="stats-flex">
+                    <div class="stat-item">
+                        <span>Active Instructors</span>
+                        <strong id="activeInstructorsValue">0</strong>
+                        <small id="instructorLimitValue">of 0 limit</small>
+                    </div>
+
+                    <div class="stat-item">
+                        <span>Active Students</span>
+                        <strong id="activeStudentsValue">0</strong>
+                        <small id="studentLimitValue">of 0 limit</small>
+                    </div>
+
+                    <div class="stat-item">
+                        <span>Instructor Usage</span>
+                        <strong id="instructorUsageText">0%</strong>
+                        <div class="usage-bar">
+                            <span id="instructorUsageBar" style="width: 0%;"></span>
+                        </div>
+                    </div>
+
+                    <div class="stat-item">
+                        <span>Student Usage</span>
+                        <strong id="studentUsageText">0%</strong>
+                        <div class="usage-bar">
+                            <span id="studentUsageBar" style="width: 0%;"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="warningList" class="warning-stack"></div>
+            </section>
+
+            <section id="dashboardJoinLinkSection" class="surface invite-section quick-access-target">
+                <div class="section-header">
+                    <h3>Academy Join Link</h3>
+                    <p>Share this link with students and instructors to join your academy</p>
+                </div>
+
+                <div class="invite-flex">
+                    <div class="invite-item">
+                        <label>Join Link</label>
+                        <div class="copy-block">
+                            <input type="text" id="academyJoinLink" value="-" readonly>
+                            <button type="button" class="chip-btn primary" data-copy-target="academyJoinLink">Copy Link</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="dashboardPlansSection" class="surface plans-section quick-access-target">
+                <div class="section-header">
+                    <h3>Subscription Plans</h3>
+                    <p>Choose a plan to activate instructor and student seats for your academy</p>
+                </div>
+
+                <div id="plansGrid" class="plans-grid"></div>
+            </section>
+
+            <section id="dashboardPaymentsSection" class="surface payments-section quick-access-target">
+                <div class="section-header">
+                    <h3>Payment History</h3>
+                    <p>Track all plan activations and upgrades</p>
+                </div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Plan</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Reference</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="paymentsTableBody">
+                            <tr>
+                                <td colspan="5" class="empty-cell">No payment activity yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="dashboardDangerSection" class="surface danger-zone-section quick-access-target">
+                <div class="section-header">
+                    <h3>Terminate Account </h3>
+                    <p>Permanently delete your academy account and all associated data</p>
+                </div>
+
+                <div class="danger-action">
+
+
+
+
+                    <button
+                        id="terminateAccountButton"
+                        type="button"
+                        class="terminate-btn"
+                        data-open-modal="terminateAccountModal">
+                        <span class="terminate-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v8h-2V9zm4 0h2v8h-2V9zM7 9h2v8H7V9zm1 11h8a2 2 0 0 0 2-2V8H6v10a2 2 0 0 0 2 2z"></path>
+                            </svg>
+                        </span>
+                        <span>Terminate Account</span>
+                    </button>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <div id="terminateAccountModal" class="modal" hidden>
+        <div class="modal-backdrop"></div>
+        <div class="modal-content terminate-modal">
+            <button class="modal-close" aria-label="Close terminate account modal">&times;</button>
+            <div class="modal-body">
+                <div class="modal-header">
+                    <p class="eyebrow">Permanent Deletion</p>
+                    <h3>Terminate this academy account?</h3>
+                    <p>This action cannot be undone.</p>
+                </div>
+
+                <div class="terminate-warning">
+                    <strong>Warning</strong>
+                    <p>
+                        If you continue, the data and access of the users who joined with your academy access code will be deleted permanently.
+                        All linked student and instructor accounts, instructor uploaded videos, courses, enrollments, payment records,
+                        and academy access links will also be removed.
+                    </p>
+                </div>
+
+                <div id="terminateNotice" class="notice info" hidden></div>
+
+                <div class="terminate-actions">
+                    <button type="button" class="ghost-btn" data-close-terminate>Cancel</button>
+                    <button id="confirmTerminateButton" type="button" class="terminate-confirm-btn">
+                        Delete Permanently
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <script src="../js/access_theme.js"></script>
+    <script src="../js/access.js"></script>
+</body>
+</html>
+

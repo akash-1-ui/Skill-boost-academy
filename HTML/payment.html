@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout | Skill Boost Nexus</title>
+    <script>
+        (() => {
+            try {
+                const theme = localStorage.getItem('skillboost-theme-access') === 'dark' ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme-role', 'access');
+            } catch (error) {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.documentElement.setAttribute('data-theme-role', 'access');
+            }
+        })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../CSS/access.css">
+    <link rel="stylesheet" href="../CSS/payment.css">
+</head>
+<body class="payment-page" data-app-role="access">
+    <nav class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="access.html">Skill Boost Nexus</a>
+            <div class="topbar-actions">
+                <button
+                    type="button"
+                    class="theme-toggle"
+                    id="paymentThemeToggle"
+                    data-theme-toggle
+                    data-theme-role="access">
+                    <span class="theme-toggle-track" aria-hidden="true">
+                        <span class="theme-toggle-thumb"></span>
+                    </span>
+                    <span class="theme-toggle-text" data-theme-label>Day Mode</span>
+                </button>
+                <a class="topbar-link" href="access-dashboard.html">Back To Dashboard</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="payment-shell">
+        <section class="payment-hero">
+            <p class="eyebrow">Secure Checkout</p>
+            <h1>Complete Payment</h1>
+            <p class="payment-hero-copy">
+                Review your selected plan, confirm academy details, and finish checkout in one smooth flow.
+            </p>
+        </section>
+
+        <div class="payment-layout">
+            <section class="surface payment-summary-card" aria-labelledby="summaryHeading">
+                <div class="payment-section-head">
+                    <div>
+                        <p class="eyebrow">Order Summary</p>
+                        <h2 id="summaryHeading">Plan overview</h2>
+                    </div>
+                </div>
+
+                <div class="summary-total-card">
+                    <span>Total due today</span>
+                    <strong id="checkoutAmount">Rs 0</strong>
+                    <small id="checkoutBillingNote">Your plan activates after successful payment verification.</small>
+                </div>
+
+                <div class="payment-summary-grid">
+                    <article class="summary-stat">
+                        <span>Selected Plan</span>
+                        <strong id="checkoutPlanName">-</strong>
+                    </article>
+
+                    <article class="summary-stat">
+                        <span>Academy</span>
+                        <strong id="checkoutAcademyName">-</strong>
+                    </article>
+
+                    <article class="summary-stat">
+                        <span>Owner</span>
+                        <strong id="checkoutOwnerName">-</strong>
+                    </article>
+
+                    <article class="summary-stat">
+                        <span>Access Code</span>
+                        <strong id="checkoutAccessCode">-</strong>
+                    </article>
+                </div>
+
+                <div class="summary-copy">
+                    <p id="checkoutPlanDescription">
+                        Plan details will appear here once you choose a package from the dashboard.
+                    </p>
+                </div>
+
+                <div class="summary-block">
+                    <h3>Included with this plan</h3>
+                    <p class="summary-note" data-plan-description-note>
+                        Plan details will appear here once you choose a package from the dashboard.
+                    </p>
+                    <ul id="checkoutFeatureList" class="feature-list">
+                        <li>Plan capacity and upgrade details will be shown here.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section class="surface payment-checkout-card" aria-labelledby="checkoutHeading">
+                <div class="payment-section-head">
+                    <div>
+                        <p class="eyebrow">Checkout</p>
+                        <h2 id="checkoutHeading">Confirm owner details</h2>
+                    </div>
+                </div>
+
+                <div id="paymentNotice" class="notice info" hidden></div>
+
+                <form id="paymentCheckoutForm" class="payment-form" novalidate>
+                    <label class="payment-field">
+                        <span>Owner Name</span>
+                        <input type="text" id="ownerName" name="ownerName" placeholder="Enter owner name" required>
+                    </label>
+
+                    <div class="payment-field-row">
+                        <label class="payment-field">
+                            <span>Email Address</span>
+                            <input type="email" id="ownerEmail" name="ownerEmail" placeholder="owner@academy.edu" required>
+                        </label>
+
+                        <label class="payment-field">
+                            <span>Phone Number</span>
+                            <input type="tel" id="ownerPhone" name="ownerPhone" placeholder="+91 9876543210" required>
+                        </label>
+                    </div>
+
+                    <div class="payment-meta-card">
+                        <strong>Accepted payment methods</strong>
+                        <div class="method-badges" aria-label="Supported payment methods">
+                            <span class="method-badge">Credit Card</span>
+                            <span class="method-badge">Debit Card</span>
+                            <span class="method-badge">UPI</span>
+                            <span class="method-badge">Wallets</span>
+                        </div>
+                    </div>
+
+                    <button id="payButton" type="submit" class="primary-btn payment-submit">
+                        Pay Now
+                    </button>
+                </form>
+
+                <div id="paymentProcessing" class="payment-state" hidden>
+                    <div class="state-spinner" aria-hidden="true"></div>
+                    <h3>Processing your payment</h3>
+                    <p>Please keep this page open while we verify the payment and activate the selected plan.</p>
+                </div>
+
+                <div id="paymentSuccess" class="payment-state success" hidden>
+                    <div class="state-mark" aria-hidden="true">OK</div>
+                    <h3>Payment completed</h3>
+                    <p id="paymentSuccessMessage">Your plan has been activated successfully.</p>
+                    <a class="chip-btn primary" href="access-dashboard.html">Return To Dashboard</a>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script src="../js/access_theme.js"></script>
+    <script src="../js/payment.js"></script>
+</body>
+</html>
+

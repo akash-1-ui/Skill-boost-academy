@@ -53,7 +53,7 @@ const studentLinks = [
 ];
 
 function HomeRedirect() {
-    const { token, user, booting } = useAuth();
+    const { token, user, organization, booting } = useAuth();
 
     if (booting) {
         return <LoadingBlock label="Opening workspace..." />;
@@ -63,11 +63,11 @@ function HomeRedirect() {
         return <Navigate to="/login" replace />;
     }
 
-    return <Navigate to={getHomePathForRole(user.role)} replace />;
+    return <Navigate to={getHomePathForRole(user.role, organization)} replace />;
 }
 
 function RoleGate({ roles, title, links }) {
-    const { token, user, booting } = useAuth();
+    const { token, user, organization, booting } = useAuth();
 
     if (booting) {
         return <LoadingBlock label="Preparing workspace..." />;
@@ -78,7 +78,7 @@ function RoleGate({ roles, title, links }) {
     }
 
     if (!roles.includes(user.role)) {
-        return <Navigate to={getHomePathForRole(user.role)} replace />;
+        return <Navigate to={getHomePathForRole(user.role, organization)} replace />;
     }
 
     return <RoleShell links={links} title={title} />;

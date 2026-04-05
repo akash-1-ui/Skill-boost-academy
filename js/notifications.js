@@ -310,7 +310,7 @@ async function initApp() {
     user = resolveStoredUser();
     if (!user) {
       console.warn('No user found, redirecting to login');
-      window.location.href = '/HTML/login.html';
+      window.location.href = 'login.html';
       return;
     }
 
@@ -719,9 +719,9 @@ function formatNotificationTimestamp(timestamp) {
 // ============ GO BACK ============
 function goBack() {
   if (userRole === 'instructor') {
-    window.location.href = '/HTML/instructor_home.html';
+    window.location.href = 'instructor_home.html';
   } else {
-    window.location.href = '/HTML/student_home.html';
+    window.location.href = 'student_home.html';
   }
 }
 
@@ -731,4 +731,3 @@ window.addEventListener('beforeunload', () => {
     clearInterval(pollingInterval);
   }
 });
-

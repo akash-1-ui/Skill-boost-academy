@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skill Boost Nexus Access Owner Portal</title>
+    <script>
+        (() => {
+            try {
+                const theme = localStorage.getItem('skillboost-theme-access') === 'dark' ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme-role', 'access');
+            } catch (error) {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.documentElement.setAttribute('data-theme-role', 'access');
+            }
+        })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../CSS/access.css">
+</head>
+<body data-app-role="access">
+    <nav class="topbar" id="portalTopbar">
+        <div class="topbar-inner">
+            <a class="brand" href="index.html">Skill Boost Nexus</a>
+            <div class="topbar-actions">
+                <button
+                    type="button"
+                    class="theme-toggle"
+                    id="accessThemeToggle"
+                    data-theme-toggle
+                    data-theme-role="access">
+                    <span class="theme-toggle-track" aria-hidden="true">
+                        <span class="theme-toggle-thumb"></span>
+                    </span>
+                    <span class="theme-toggle-text" data-theme-label>Day Mode</span>
+                </button>
+                <button id="workspaceLink" class="topbar-btn" onclick="window.location.href='index.html'">Workspace</button>
+                <button id="registerModalButton" type="button" class="topbar-btn" data-open-modal="registerModal">Register</button>
+                <button id="loginModalButton" type="button" class="topbar-btn secondary" data-open-modal="loginModal">Login</button>
+                <span id="sessionBadge" class="session-badge" hidden>Owner Session Active</span>
+            </div>
+        </div>
+    </nav>
+
+    <header id="accessHero" class="hero">
+        <div class="hero-copy">
+            <p class="eyebrow">Academy Access Portal</p>
+            <h1>Register or sign in first, then manage plans, payments, limits, and invite access from your dashboard.</h1>
+            <p class="hero-text">
+                The public access page is now only for academy owners. Subscription plans, payment history, usage limits,
+                and invite links appear after the owner account is registered or logged in.
+            </p>
+        </div>
+
+        <div class="hero-panel">
+            <div class="hero-stat">
+                <span>Private dashboard</span>
+                <strong>Plans, payments, limits</strong>
+            </div>
+            <div class="hero-stat">
+                <span>Owner access</span>
+                <strong>Separate register and login flow</strong>
+            </div>
+            <div class="hero-stat">
+                <span>Academy sharing</span>
+                <strong>Invite links for instructors and students</strong>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="authSection" class="auth-section">
+        </section>
+
+        <!-- Register Modal -->
+        <div id="registerModal" class="modal" hidden>
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <button class="modal-close" aria-label="Close register modal">&times;</button>
+                <div class="modal-body">
+                    <div class="modal-header">
+                        <p class="eyebrow">Register</p>
+                        <h3>Create a new academy workspace</h3>
+                        <p>We will create the owner account, generate a unique academy access code automatically, and open your dashboard.</p>
+                    </div>
+
+                    <form id="modalRegisterForm" class="form-stack">
+                        <label>
+                            Academy Name
+                            <input type="text" id="modalRegisterAcademyName" placeholder="Skill Boost Nexus" required>
+                        </label>
+
+                        <label>
+                            User Name
+                            <input type="text" id="modalRegisterOwnerName" placeholder="User name" required>
+                        </label>
+
+                        <label>
+                            Email
+                            <input type="email" id="modalRegisterOwnerEmail" placeholder="Example123@gmail.com" required>
+                        </label>
+
+                        <label>
+                            Phone
+                            <input type="tel" id="modalRegisterOwnerPhone" placeholder="+91 9876543210">
+                        </label>
+
+                        <label>
+                            Password
+                            <input type="password" id="modalRegisterOwnerPassword" placeholder="Create a strong password" required>
+                        </label>
+
+                        <button id="modalRegisterSubmitButton" type="submit" class="primary-btn">Create Account</button>
+                    </form>
+
+                    <div id="modalRegisterNotice" class="notice info" hidden></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login Modal -->
+        <div id="loginModal" class="modal" hidden>
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <button class="modal-close" aria-label="Close login modal">&times;</button>
+                <div class="modal-body">
+                    <div class="modal-header">
+                        <p class="eyebrow">Login</p>
+                        <h3>Open your user dashboard</h3>
+                        <p>Sign in with your user email and password to manage plans, payments, and access.</p>
+                    </div>
+
+                    <form id="modalLoginForm" class="form-stack">
+                        <label>
+                            Email
+                            <input type="email" id="modalLoginOwnerEmail" placeholder="Example123@gmail.com" required>
+                        </label>
+
+                        <label>
+                            Password
+                            <input type="password" id="modalLoginOwnerPassword" placeholder="Enter your password" required>
+                        </label>
+
+                        <button id="modalLoginSubmitButton" type="submit" class="secondary-btn">Login To Dashboard</button>
+                    </form>
+
+                    <div id="modalLoginNotice" class="notice info" hidden></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <script src="../js/access_theme.js"></script>
+    <script src="../js/access.js"></script>
+</body>
+</html>
+

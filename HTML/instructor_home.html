@@ -18,14 +18,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/CSS/instructorhome.css?v=20260331-theme-toggle">
+    <link rel="stylesheet" href="../CSS/instructorhome.css?v=20260331-theme-toggle">
 </head>
 <body data-app-role="instructor">
     <aside class="sidebar">
         <div class="sidebar-brand">
             <span class="brand-mark">SB</span>
             <div class="brand-text">
-                <span class="brand-title">SkillBoost</span>
+                <span class="brand-title">Skill Boost Nexus</span>
                 <span class="brand-subtitle">Instructor Studio</span>
             </div>
         </div>
@@ -441,16 +441,26 @@
     </div>
     <div class="drawer-overlay" id="profileOverlay"></div>
 
-    <script src="/js/theme_mode.js?v=20260331-theme-toggle"></script>
-    <script src="/js/profile_drawer.js"></script>
-    <script src="/js/account_actions.js"></script>
-    <script src="/js/addcourse.js"></script>
+    <script src="../js/theme_mode.js?v=20260331-theme-toggle"></script>
+    <script src="../js/profile_drawer.js"></script>
+    <script src="../js/account_actions.js"></script>
+    <script src="../js/addcourse.js"></script>
     <script>
         const instructorId = localStorage.getItem('instructorId');
         const instructorName = localStorage.getItem('instructorName');
         const instructorPhoto = localStorage.getItem('instructorPhoto');
         const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
         const API_BASE = 'http://localhost:3000';
+
+        function clearInstructorSession() {
+            localStorage.removeItem('instructorId');
+            localStorage.removeItem('instructorName');
+            localStorage.removeItem('instructorPhoto');
+            localStorage.removeItem('instructorEmail');
+            localStorage.removeItem('instructorCourse');
+            localStorage.removeItem('instructorBio');
+            localStorage.removeItem('academyId');
+        }
 
         function normalizePhoto(value) {
             const raw = String(value || '').trim();
@@ -1019,6 +1029,12 @@
                 const data = await response.json();
 
                 if (!response.ok) {
+                    if (response.status === 403) {
+                        clearInstructorSession();
+                        alert(data.error || 'This access code cannot be used for this instructor anymore. Please use another access code.');
+                        window.location.href = 'login.html?role=instructor&notice=use_another_code';
+                        return;
+                    }
                     throw new Error(data.error || 'Failed to load dashboard data');
                 }
 
@@ -1061,12 +1077,7 @@
 
         document.getElementById('logoutBtn').addEventListener('click', function(e) {
             e.preventDefault();
-            localStorage.removeItem('instructorId');
-            localStorage.removeItem('instructorName');
-            localStorage.removeItem('instructorPhoto');
-            localStorage.removeItem('instructorEmail');
-            localStorage.removeItem('instructorCourse');
-            localStorage.removeItem('instructorBio');
+            clearInstructorSession();
             window.location.href = 'index.html';
         });
 

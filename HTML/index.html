@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SkillBoost Academy</title>
+  <title>Skill Boost Nexus</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/CSS/index.css" />
+  <link rel="stylesheet" href="../CSS/index.css" />
 </head>
 <body>
   <div class="page-shell">
@@ -17,18 +17,19 @@
 
     <nav class="navbar">
       <div class="nav-container">
-        <a class="brand" href="index.html" aria-label="SkillBoost Academy home">
+        <a class="brand" href="index.html" aria-label="Skill Boost Nexus home">
           <span class="brand-mark"></span>
           <span class="brand-text">
-            <strong>SkillBoost</strong>
-            <span>Academy</span>
+            <strong>Skill Boost </strong>
+            <span>Nexus</span>
           </span>
         </a>
 
         <div class="nav-actions">
           <ul class="nav-links">
+             <li><a href="access.html">Access</a></li>
             <li><a href="#overview">Overview</a></li>
-            <li><a href="#access" id="accessLink" class="access-trigger">Access</a></li>
+            <li><a href="#access" id="accessLink" class="access-trigger">Check in</a></li>
             <li><a href="#tracks">Tracks</a></li>
           </ul>
           <a class="nav-cta access-trigger" href="#access">Open Portal</a>
@@ -42,7 +43,7 @@
           <p class="eyebrow">Online learning platform</p>
           <h1>One place to learn, teach, and manage courses with ease.</h1>
           <p class="hero-lead">
-            SkillBoost Academy helps students continue lessons, instructors manage courses, and everyone
+            Skill Boost Nexus helps students continue lessons, instructors manage courses, and everyone
             reach the right workspace quickly without extra clutter.
           </p>
 
@@ -75,7 +76,7 @@
                 <span></span>
                 <span></span>
               </div>
-              <div class="preview-pill">SkillBoost Workspace</div>
+              <div class="preview-pill">Skill Boost Nexus Workspace</div>
             </div>
 
             <div class="preview-search">
@@ -157,6 +158,8 @@
   <script>
     const accessSection = document.getElementById('access');
     const accessTriggers = document.querySelectorAll('.access-trigger');
+    const inviteParams = new URLSearchParams(window.location.search);
+    const inviteCode = (inviteParams.get('code') || '').trim().toUpperCase();
 
     function openAccessPortal(event) {
       if (!accessSection) {
@@ -172,11 +175,32 @@
       accessSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
+    function attachInviteCode(selector) {
+      if (!inviteCode) {
+        return;
+      }
+
+      document.querySelectorAll(selector).forEach((link) => {
+        const rawHref = link.getAttribute('href');
+        if (!rawHref) {
+          return;
+        }
+
+        const targetUrl = new URL(rawHref, window.location.href);
+        targetUrl.searchParams.set('code', inviteCode);
+        link.setAttribute('href', `${targetUrl.pathname.split('/').pop()}${targetUrl.search}`);
+      });
+    }
+
+    attachInviteCode('a[href^="login.html"]');
+    attachInviteCode('a[href="registration.html"]');
+    attachInviteCode('a[href="instructor_registration.html"]');
+
     accessTriggers.forEach((trigger) => {
       trigger.addEventListener('click', openAccessPortal);
     });
 
-    if (window.location.hash === '#access' && accessSection) {
+    if ((window.location.hash === '#access' || inviteCode) && accessSection) {
       accessSection.classList.add('open');
     }
   </script>

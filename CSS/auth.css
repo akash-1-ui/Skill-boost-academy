@@ -434,6 +434,33 @@ select {
   text-align: center;
 }
 
+.auth-status {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.auth-status.info {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(125, 211, 252, 0.2);
+  color: var(--text-soft);
+}
+
+.auth-status.success {
+  background: rgba(103, 232, 249, 0.12);
+  border-color: rgba(103, 232, 249, 0.2);
+  color: var(--success);
+}
+
+.auth-status.error {
+  background: rgba(251, 113, 133, 0.14);
+  border-color: rgba(251, 113, 133, 0.22);
+  color: #fecdd3;
+}
+
 .forgot-modal {
   display: none;
   position: fixed;

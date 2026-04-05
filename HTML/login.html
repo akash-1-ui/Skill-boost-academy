@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SkillBoost Academy Login</title>
+  <title>Skill Boost Nexus Login</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/CSS/auth.css" />
-  <link rel="stylesheet" href="/CSS/login.css" />
+  <link rel="stylesheet" href="../CSS/auth.css" />
+  <link rel="stylesheet" href="../CSS/login.css" />
 </head>
 <body class="auth-body login-page">
   <main class="auth-shell">
     <section class="auth-intro">
       <a class="back-link" href="index.html#access">Back to home</a>
       <div>
-        <p class="eyebrow">SkillBoost Access</p>
+        <p class="eyebrow">Skill Boost Nexus Access</p>
         <h1>Sign in and get back to your dashboard.</h1>
         <p class="auth-intro-copy">Choose student or instructor access and continue your courses or teaching work without extra steps.</p>
       </div>
@@ -43,7 +43,7 @@
         <div class="login-header">
           <p class="eyebrow">Access Portal</p>
           <h2>Welcome back</h2>
-          <p class="subtext">Choose your role and continue from where you stopped.</p>
+          <p class="subtext">Register first, then sign in with your academy access code to open the correct dashboard.</p>
         </div>
 
         <div class="role-tabs" role="tablist" aria-label="Login role">
@@ -52,6 +52,11 @@
         </div>
 
         <form id="studentLoginForm" class="login-form" autocomplete="on">
+          <div class="form-group">
+            <label for="studentAccessCode">Academy Access Code</label>
+            <input type="text" id="studentAccessCode" name="accessCode" placeholder="Enter academy access code" required />
+          </div>
+
           <div class="form-group">
             <label for="studentEmail">Student Email</label>
             <input type="email" id="studentEmail" name="email" placeholder="Enter your student email" autocomplete="email" required />
@@ -70,13 +75,19 @@
           </div>
 
           <button type="submit">Login as Student</button>
+          <p id="studentLoginStatus" class="auth-status" aria-live="polite" hidden></p>
 
           <p class="switch-role">
-            Teaching on SkillBoost? <a href="login.html?role=instructor">Instructor login</a>
+            Teaching on Skill Boost Nexus? <a href="login.html?role=instructor">Instructor login</a>
           </p>
         </form>
 
         <form id="instructorLoginForm" class="login-form" autocomplete="on">
+          <div class="form-group">
+            <label for="instructorAccessCode">Academy Access Code</label>
+            <input type="text" id="instructorAccessCode" name="accessCode" placeholder="Enter academy access code" required />
+          </div>
+
           <div class="form-group">
             <label for="instructorEmail">Instructor Email</label>
             <input type="email" id="instructorEmail" name="email" placeholder="Enter your instructor email" autocomplete="email" required />
@@ -95,6 +106,7 @@
           </div>
 
           <button type="submit">Login as Instructor</button>
+          <p id="instructorLoginStatus" class="auth-status" aria-live="polite" hidden></p>
 
           <p class="switch-role">
             Want to start learning? <a href="login.html?role=student">Student login</a>
@@ -159,6 +171,7 @@
       button.textContent = isPassword ? 'Hide' : 'Show';
     }
   </script>
-  <script src="/js/login.js"></script>
+  <script src="../js/login.js"></script>
 </body>
 </html>
+

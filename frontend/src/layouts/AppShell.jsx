@@ -11,7 +11,10 @@ export function RoleShell({ links, title }) {
                     <span className="eyebrow">Multi-Tenant Campus OS</span>
                     <h1>{title}</h1>
                     <p>{organization?.college_name || 'Organization'}</p>
-                    <div className="access-code-chip">Access Code: {organization?.access_code || '-'}</div>
+                    <div className="chip-stack">
+                        <div className="access-code-chip">Academy ID: {organization?.academy_id || '-'}</div>
+                        <div className="access-code-chip">Access Code: {organization?.access_code || '-'}</div>
+                    </div>
                 </div>
 
                 <nav className="nav-list">

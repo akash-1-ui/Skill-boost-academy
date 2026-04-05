@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .section { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        pre { background: #f0f0f0; padding: 10px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Skill Boost Nexus Access API Test</h1>
+
+    <div class="section">
+        <h2>1. Test Registration</h2>
+        <button onclick="testRegister()">Test Register</button>
+        <div id="registerOutput"></div>
+    </div>
+
+    <div class="section">
+        <h2>2. Test Dashboard</h2>
+        <button onclick="testDashboard()">Test Dashboard</button>
+        <div id="dashboardOutput"></div>
+    </div>
+
+    <div class="section">
+        <h2>3. Session Storage</h2>
+        <button onclick="showSession()">Show Session</button>
+        <pre id="sessionOutput"></pre>
+    </div>
+
+    <div class="section">
+        <h2>4. Plans Data</h2>
+        <pre id="plansOutput"></pre>
+    </div>
+
+    <script>
+        let token = null;
+
+        async function testRegister() {
+            const output = document.getElementById('registerOutput');
+            output.innerHTML = '<p>Loading...</p>';
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/access/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customer_name: 'Test ' + Date.now(),
+                        customer_email: 'test-' + Date.now() + '@example.com',
+                        phone: '9876543210',
+                        password: 'TestPass@123',
+                        academy_name: 'Test Academy ' + Date.now()
+                    })
+                });
+                
+                const data = await response.json();
+                token = data.token;
+                output.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                
+                // Store session
+                localStorage.setItem('skillboost-access-owner-session', JSON.stringify({
+                    token: token,
+                    summary: data.summary || null
+                }));
+                
+                console.log('[TEST] Token:', token);
+            } catch (error) {
+                output.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+
+        async function testDashboard() {
+            const output = document.getElementById('dashboardOutput');
+            if (!token) {
+                output.innerHTML = '<p style="color: red;">No token. Register first.</p>';
+                return;
+            }
+            
+            output.innerHTML = '<p>Loading...</p>';
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/access/dashboard', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+                
+                const data = await response.json();
+                output.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                
+                // Show plans separately
+                document.getElementById('plansOutput').innerHTML = 
+                    '<strong>Plans (' + (data.plans?.length || 0) + '):</strong>\n' +
+                    JSON.stringify(data.plans, null, 2);
+                
+                console.log('[TEST] Dashboard data:', data);
+            } catch (error) {
+                output.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+
+        function showSession() {
+            const session = localStorage.getItem('skillboost-access-owner-session');
+            document.getElementById('sessionOutput').textContent = session || 'No session stored';
+        }
+
+        // Auto-show session on load
+        window.addEventListener('load', showSession);
+    </script>
+</body>
+</html>

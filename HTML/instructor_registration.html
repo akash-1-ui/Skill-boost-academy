@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/CSS/auth.css" />
-  <link rel="stylesheet" href="/CSS/registration.css" />
+  <link rel="stylesheet" href="../CSS/auth.css" />
+  <link rel="stylesheet" href="../CSS/registration.css" />
 </head>
 <body class="auth-body">
   <main class="auth-shell">
@@ -43,9 +43,12 @@
         <div class="auth-header">
           <p class="eyebrow">Instructor Registration</p>
           <h2>Create instructor account</h2>
-          <p class="subtext">Share your expertise and publish courses for learners.</p>
+          <p class="subtext">Register with your academy access code first, then login to open the instructor dashboard.</p>
         </div>
         <form id="instructorRegistrationForm" class="registration-form">
+          <label for="accessCode">Academy Access Code</label>
+          <input type="text" id="accessCode" name="accessCode" placeholder="Enter academy access code" required>
+
           <label for="fullname">Full Name</label>
           <input type="text" id="fullname" name="fullname" placeholder="Your full name" required>
 
@@ -67,8 +70,9 @@
           <button type="submit">Register as Instructor</button>
         </form>
 
+        <p id="instructorRegistrationStatus" class="auth-status" aria-live="polite" hidden></p>
         <div id="success-message" class="success-message" style="display: none;">
-          Registration Successful! Redirecting to Instructor Dashboard...
+          Registration successful. Redirecting to instructor login...
         </div>
 
         <div class="switch-link">
@@ -78,7 +82,7 @@
     </section>
   </main>
 
-  <script src="/js/instructor_registration.js"></script>
+  <script src="../js/instructor_registration.js"></script>
   <script>
   function togglePassword(inputId, btn) {
     const input = document.getElementById(inputId);

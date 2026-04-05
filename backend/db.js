@@ -53,6 +53,7 @@ async function initializeDatabase() {
                 expertise VARCHAR(255),
                 branch VARCHAR(255),
                 profile_photo LONGTEXT,
+                academy_id VARCHAR(36),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -62,6 +63,7 @@ async function initializeDatabase() {
         await ensureColumnExists('users', 'expertise', 'expertise VARCHAR(255) AFTER role');
         await ensureColumnExists('users', 'branch', 'branch VARCHAR(255) AFTER expertise');
         await ensureColumnExists('users', 'profile_photo', 'profile_photo LONGTEXT AFTER branch');
+        await ensureColumnExists('users', 'academy_id', 'academy_id VARCHAR(36) NULL AFTER profile_photo');
 
         console.log(`Users table verified/created in database "${databaseName}"`);
 

@@ -4,6 +4,8 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const db = require('./db');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
@@ -21,7 +23,6 @@ const {
     deleteVideoAssetByUrl,
     extractCloudinaryPublicId
 } = require('./cloudinary');
-const { saasRouter, ensureMultiTenantSchema } = require('./saas');
 
 let cron = null;
 try {
@@ -37,6 +38,8 @@ const RESET_OTP_EXPIRY_MINUTES = Number(process.env.RESET_OTP_EXPIRY_MINUTES || 
 const RESET_OTP_RESEND_SECONDS = Number(process.env.RESET_OTP_RESEND_SECONDS || 60);
 const RESET_OTP_MAX_ATTEMPTS = Number(process.env.RESET_OTP_MAX_ATTEMPTS || 5);
 const LOCAL_VIDEO_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const ACCESS_OWNER_JWT_SECRET = process.env.ACCESS_OWNER_JWT_SECRET || 'skillboostacademy-access-owner-secret';
+const RAZORPAY_API_BASE = 'https://api.razorpay.com/v1';
 
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
@@ -92,10 +95,15 @@ function optionalVideoUpload(req, res, next) {
 }
 
 app.use(cors({
-    origin: '*',
+    origin: function (origin, callback) {
+        // Allow all origins (including no origin for development)
+        callback(null, true);
+    },
     credentials: false,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin'],
+    exposedHeaders: ['Content-Type'],
+    maxAge: 86400
 }));
 app.use(bodyParser.json({ limit: '25mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '25mb' }));
@@ -108,8 +116,6 @@ app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
     next();
 });
-
-app.use('/api', saasRouter);
 
 // Root route - serve index.html
 app.get('/', (req, res) => {
@@ -228,7 +234,7 @@ async function findUserByPhoneAndRole(phone, role) {
 
 async function sendResetOtpSms(phone, otp) {
     const provider = String(process.env.SMS_PROVIDER || 'mock').trim().toLowerCase();
-    const messageText = `SkillBoost Academy reset code: ${otp}. Valid for ${RESET_OTP_EXPIRY_MINUTES} minutes.`;
+    const messageText = `Skill Boost Nexus reset code: ${otp}. Valid for ${RESET_OTP_EXPIRY_MINUTES} minutes.`;
 
     if (provider === 'twilio') {
         const sid = process.env.TWILIO_ACCOUNT_SID;
@@ -1003,7 +1009,6 @@ async function initializeTables() {
 
 initializeTables()
     .then(async () => {
-        await ensureMultiTenantSchema();
         scheduleCourseLifecycleJobs();
         try {
             const result = await runCourseLifecycleSweep();
@@ -2164,27 +2169,70 @@ app.post(['/courses', '/api/courses', '/submit-course'], upload.fields([
 
 app.post('/api/register', async (req, res) => {
     try {
-        const { name, email, phone, course, password } = req.body;
+        const name = String(req.body.name || '').trim();
+        const email = normalizeCustomerEmail(req.body.email);
+        const phone = String(req.body.phone || '').trim();
+        const course = String(req.body.course || '').trim();
+        const password = String(req.body.password || '');
+        const accessCode = normalizeAccessCode(req.body.accessCode || req.body.access_code);
 
-        if (!name || !email || !password) {
-            return res.status(400).json({ error: 'Name, email and password are required' });
+        if (!name || !email || !password || !accessCode) {
+            return res.status(400).json({ error: 'Name, email, password and access code are required' });
         }
 
-        const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+        const academy = await findAcademyByAccessCode(accessCode);
+        if (!academy) {
+            return res.status(401).json({ error: 'Invalid access code' });
+        }
+
+        const capacity = await getAcademyRoleCapacity(academy.id, 'student');
+        if (capacity.limit > 0 && capacity.current >= capacity.limit) {
+            const message = buildAccessLimitMessage('student');
+            await logAccessAttempt(academy.id, 'student', 'failed', message, email);
+            return res.status(403).json({
+                error: message,
+                current_count: capacity.current,
+                max_count: capacity.limit
+            });
+        }
+
+        const [existing] = await db.query(
+            `SELECT id, role, academy_id
+             FROM users
+             WHERE email = ?
+             LIMIT 1`,
+            [email]
+        );
         if (existing.length > 0) {
+            const existingUser = existing[0];
+            const existingAcademyId = String(existingUser.academy_id || '').trim();
+
+            if (existingUser.role === 'student' && existingAcademyId === String(academy.id)) {
+                return res.status(409).json({
+                    error: 'A student account for this email already exists for this academy. Please login instead.'
+                });
+            }
+
+            if (existingUser.role === 'student' && !existingAcademyId) {
+                return res.status(409).json({
+                    error: 'This email already has a student account. Please login with your existing password and academy access code.'
+                });
+            }
+
             return res.status(409).json({ error: 'Email already registered' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const [result] = await db.query(
-            `INSERT INTO users (username, email, phone, password, role, branch, created_at)
-             VALUES (?, ?, ?, ?, 'student', ?, NOW())`,
-            [name, email, phone || null, hashedPassword, course || null]
+            `INSERT INTO users (username, email, phone, password, role, branch, academy_id, created_at)
+             VALUES (?, ?, ?, ?, 'student', ?, ?, NOW())`,
+            [name, email, phone || null, hashedPassword, course || null, academy.id]
         );
 
         return res.status(201).json({
             message: 'Registration successful',
-            userId: result.insertId
+            userId: result.insertId,
+            academy_id: academy.id
         });
     } catch (error) {
         console.error('Student registration error:', error);
@@ -2194,27 +2242,70 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/register/instructor', async (req, res) => {
     try {
-        const { name, email, phone, expertise, password } = req.body;
+        const name = String(req.body.name || '').trim();
+        const email = normalizeCustomerEmail(req.body.email);
+        const phone = String(req.body.phone || '').trim();
+        const expertise = String(req.body.expertise || '').trim();
+        const password = String(req.body.password || '');
+        const accessCode = normalizeAccessCode(req.body.accessCode || req.body.access_code);
 
-        if (!name || !email || !expertise || !password) {
-            return res.status(400).json({ error: 'Name, email, expertise and password are required' });
+        if (!name || !email || !expertise || !password || !accessCode) {
+            return res.status(400).json({ error: 'Name, email, expertise, password and access code are required' });
         }
 
-        const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+        const academy = await findAcademyByAccessCode(accessCode);
+        if (!academy) {
+            return res.status(401).json({ error: 'Invalid access code' });
+        }
+
+        const capacity = await getAcademyRoleCapacity(academy.id, 'instructor');
+        if (capacity.limit > 0 && capacity.current >= capacity.limit) {
+            const message = buildAccessLimitMessage('instructor');
+            await logAccessAttempt(academy.id, 'instructor', 'failed', message, email);
+            return res.status(403).json({
+                error: message,
+                current_count: capacity.current,
+                max_count: capacity.limit
+            });
+        }
+
+        const [existing] = await db.query(
+            `SELECT id, role, academy_id
+             FROM users
+             WHERE email = ?
+             LIMIT 1`,
+            [email]
+        );
         if (existing.length > 0) {
+            const existingUser = existing[0];
+            const existingAcademyId = String(existingUser.academy_id || '').trim();
+
+            if (existingUser.role === 'instructor' && existingAcademyId === String(academy.id)) {
+                return res.status(409).json({
+                    error: 'An instructor account for this email already exists for this academy. Please login instead.'
+                });
+            }
+
+            if (existingUser.role === 'instructor' && !existingAcademyId) {
+                return res.status(409).json({
+                    error: 'This email already has an instructor account. Please login with your existing password and academy access code.'
+                });
+            }
+
             return res.status(409).json({ error: 'Email already registered' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const [result] = await db.query(
-            `INSERT INTO users (username, email, phone, password, role, expertise, created_at)
-             VALUES (?, ?, ?, ?, 'instructor', ?, NOW())`,
-            [name, email, phone || null, hashedPassword, expertise]
+            `INSERT INTO users (username, email, phone, password, role, expertise, academy_id, created_at)
+             VALUES (?, ?, ?, ?, 'instructor', ?, ?, NOW())`,
+            [name, email, phone || null, hashedPassword, expertise, academy.id]
         );
 
         return res.status(201).json({
             message: 'Instructor registration successful',
-            userId: result.insertId
+            userId: result.insertId,
+            academy_id: academy.id
         });
     } catch (error) {
         console.error('Instructor registration error:', error);
@@ -2224,32 +2315,98 @@ app.post('/api/register/instructor', async (req, res) => {
 
 app.post('/api/login/student', async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const email = normalizeCustomerEmail(req.body.email);
+        const password = String(req.body.password || '');
+        const accessCode = normalizeAccessCode(req.body.accessCode || req.body.access_code);
 
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
+        if (!email || !password || !accessCode) {
+            return res.status(400).json({ error: 'Email, password and access code are required' });
+        }
+
+        const academy = await findAcademyByAccessCode(accessCode);
+        if (!academy) {
+            return res.status(401).json({ error: 'Invalid access code' });
         }
 
         const [users] = await db.query(
             `SELECT id, username AS name, email, password, branch, profile_photo
              FROM users
-             WHERE email = ? AND role = 'student'`,
-            [email]
+             WHERE email = ? AND role = 'student' AND academy_id = ?
+             LIMIT 1`,
+            [email, academy.id]
         );
 
-        if (users.length === 0) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+        let student = users[0] || null;
+
+        if (student) {
+            const passwordMatches = await bcrypt.compare(password, student.password);
+            if (!passwordMatches) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+        } else {
+            const [legacyUsers] = await db.query(
+                `SELECT id, username AS name, email, password, branch, profile_photo, academy_id
+                 FROM users
+                 WHERE email = ? AND role = 'student'
+                 LIMIT 1`,
+                [email]
+            );
+
+            const legacyStudent = legacyUsers[0] || null;
+            const legacyAcademyId = String(legacyStudent?.academy_id || '').trim();
+
+            if (legacyStudent && !legacyAcademyId) {
+                const passwordMatches = await bcrypt.compare(password, legacyStudent.password);
+                if (!passwordMatches) {
+                    return res.status(401).json({ error: 'Invalid credentials' });
+                }
+
+                await db.query(
+                    `UPDATE users
+                     SET academy_id = ?
+                     WHERE id = ?`,
+                    [academy.id, legacyStudent.id]
+                );
+
+                legacyStudent.academy_id = academy.id;
+                student = legacyStudent;
+            }
         }
 
-        const student = users[0];
-        const passwordMatches = await bcrypt.compare(password, student.password);
-        if (!passwordMatches) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+        if (!student) {
+            const capacity = await getAcademyRoleCapacity(academy.id, 'student');
+            if (capacity.limit > 0 && capacity.current >= capacity.limit) {
+                const message = buildUseAnotherAccessCodeMessage('student');
+                await logAccessAttempt(academy.id, 'student', 'failed', message, email);
+                return res.status(403).json({
+                    error: message,
+                    current_count: capacity.current,
+                    max_count: capacity.limit
+                });
+            }
+
+            return res.status(401).json({
+                error: 'No student account was found for this academy access code. Please register first.'
+            });
+        }
+
+        const studentSeatState = await getAcademyRoleSeatState(academy.id, 'student');
+        if (studentSeatState.limit > 0 &&
+            studentSeatState.current > studentSeatState.limit &&
+            !studentSeatState.activeUserIds.has(Number(student.id))) {
+            const message = buildUseAnotherAccessCodeMessage('student');
+            await logAccessAttempt(academy.id, 'student', 'failed', message, email);
+            return res.status(403).json({
+                error: message,
+                current_count: studentSeatState.current,
+                max_count: studentSeatState.limit
+            });
         }
 
         delete student.password;
         student.photo = student.profile_photo || DEFAULT_PROFILE_PHOTO;
         delete student.profile_photo;
+        student.academy_id = academy.id;
 
         return res.json({
             message: 'Login successful',
@@ -2263,32 +2420,98 @@ app.post('/api/login/student', async (req, res) => {
 
 app.post('/api/login/instructor', async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const email = normalizeCustomerEmail(req.body.email);
+        const password = String(req.body.password || '');
+        const accessCode = normalizeAccessCode(req.body.accessCode || req.body.access_code);
 
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
+        if (!email || !password || !accessCode) {
+            return res.status(400).json({ error: 'Email, password and access code are required' });
+        }
+
+        const academy = await findAcademyByAccessCode(accessCode);
+        if (!academy) {
+            return res.status(401).json({ error: 'Invalid access code' });
         }
 
         const [users] = await db.query(
             `SELECT id, username AS name, email, password, expertise, profile_photo
              FROM users
-             WHERE email = ? AND role = 'instructor'`,
-            [email]
+             WHERE email = ? AND role = 'instructor' AND academy_id = ?
+             LIMIT 1`,
+            [email, academy.id]
         );
 
-        if (users.length === 0) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+        let instructor = users[0] || null;
+
+        if (instructor) {
+            const passwordMatches = await bcrypt.compare(password, instructor.password);
+            if (!passwordMatches) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+        } else {
+            const [legacyUsers] = await db.query(
+                `SELECT id, username AS name, email, password, expertise, profile_photo, academy_id
+                 FROM users
+                 WHERE email = ? AND role = 'instructor'
+                 LIMIT 1`,
+                [email]
+            );
+
+            const legacyInstructor = legacyUsers[0] || null;
+            const legacyAcademyId = String(legacyInstructor?.academy_id || '').trim();
+
+            if (legacyInstructor && !legacyAcademyId) {
+                const passwordMatches = await bcrypt.compare(password, legacyInstructor.password);
+                if (!passwordMatches) {
+                    return res.status(401).json({ error: 'Invalid credentials' });
+                }
+
+                await db.query(
+                    `UPDATE users
+                     SET academy_id = ?
+                     WHERE id = ?`,
+                    [academy.id, legacyInstructor.id]
+                );
+
+                legacyInstructor.academy_id = academy.id;
+                instructor = legacyInstructor;
+            }
         }
 
-        const instructor = users[0];
-        const passwordMatches = await bcrypt.compare(password, instructor.password);
-        if (!passwordMatches) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+        if (!instructor) {
+            const capacity = await getAcademyRoleCapacity(academy.id, 'instructor');
+            if (capacity.limit > 0 && capacity.current >= capacity.limit) {
+                const message = buildUseAnotherAccessCodeMessage('instructor');
+                await logAccessAttempt(academy.id, 'instructor', 'failed', message, email);
+                return res.status(403).json({
+                    error: message,
+                    current_count: capacity.current,
+                    max_count: capacity.limit
+                });
+            }
+
+            return res.status(401).json({
+                error: 'No instructor account was found for this academy access code. Please register first.'
+            });
+        }
+
+        const instructorSeatState = await getAcademyRoleSeatState(academy.id, 'instructor');
+        if (instructorSeatState.limit > 0 &&
+            instructorSeatState.current > instructorSeatState.limit &&
+            !instructorSeatState.activeUserIds.has(Number(instructor.id))) {
+            const message = buildUseAnotherAccessCodeMessage('instructor');
+            await logAccessAttempt(academy.id, 'instructor', 'failed', message, email);
+            return res.status(403).json({
+                error: message,
+                current_count: instructorSeatState.current,
+                max_count: instructorSeatState.limit
+            });
         }
 
         delete instructor.password;
         instructor.photo = instructor.profile_photo || DEFAULT_PROFILE_PHOTO;
         delete instructor.profile_photo;
+        instructor.academy_id = academy.id;
 
         return res.json({
             message: 'Login successful',
@@ -3042,6 +3265,13 @@ app.get('/api/instructor-dashboard/:instructorId', async (req, res) => {
     }
 
     try {
+        const seatAccess = await getUserSeatAccessState(instructorId, 'instructor');
+        if (!seatAccess.allowed) {
+            return res.status(403).json({
+                error: buildUseAnotherAccessCodeMessage('instructor')
+            });
+        }
+
         const [courseRows] = await db.query(
             `SELECT
                 c.*,
@@ -3159,6 +3389,13 @@ app.get('/api/instructor-summary/:instructorId', async (req, res) => {
     }
 
     try {
+        const seatAccess = await getUserSeatAccessState(instructorId, 'instructor');
+        if (!seatAccess.allowed) {
+            return res.status(403).json({
+                error: buildUseAnotherAccessCodeMessage('instructor')
+            });
+        }
+
         const [rows] = await db.query(
             `SELECT
                 COUNT(*) AS activeCourses,
@@ -3489,6 +3726,1753 @@ app.use((err, req, res, next) => {
     });
 });
 
+// ============================================
+// Academy Access & Subscription APIs
+// ============================================
+
+// Initialize plans and academies tables
+async function initializeAccessTables() {
+    try {
+        // Plans table
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS plans (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(100) NOT NULL UNIQUE,
+                max_instructors INT NOT NULL,
+                max_students INT NOT NULL,
+                price INT NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_name (name)
+            )
+        `);
+
+        // Customers table
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS customers (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                phone VARCHAR(20),
+                password_hash VARCHAR(255),
+                status VARCHAR(50) DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_email (email),
+                INDEX idx_status (status)
+            )
+        `);
+
+        // Academies table
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS academies (
+                id VARCHAR(36) PRIMARY KEY,
+                customer_id INT NOT NULL,
+                plan_id INT NOT NULL,
+                academy_name VARCHAR(255) NOT NULL,
+                access_code VARCHAR(20) NOT NULL UNIQUE,
+                status VARCHAR(50) DEFAULT 'active',
+                instructor_count INT DEFAULT 0,
+                student_count INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+                FOREIGN KEY (plan_id) REFERENCES plans(id),
+                INDEX idx_customer_id (customer_id),
+                INDEX idx_access_code (access_code),
+                INDEX idx_plan_id (plan_id)
+            )
+        `);
+
+        // Attempt logs table
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS attempt_logs (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                academy_id VARCHAR(36) NOT NULL,
+                type ENUM('student', 'instructor') NOT NULL,
+                status ENUM('success', 'failed') DEFAULT 'success',
+                reason VARCHAR(255),
+                email VARCHAR(255),
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (academy_id) REFERENCES academies(id) ON DELETE CASCADE,
+                INDEX idx_academy_id (academy_id),
+                INDEX idx_type (type),
+                INDEX idx_timestamp (timestamp)
+            )
+        `);
+
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS academy_payments (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                academy_id VARCHAR(36) NOT NULL,
+                customer_id INT NOT NULL,
+                plan_id INT NOT NULL,
+                plan_name VARCHAR(100) NOT NULL,
+                amount INT NOT NULL,
+                currency VARCHAR(10) DEFAULT 'INR',
+                status VARCHAR(50) DEFAULT 'completed',
+                payment_reference VARCHAR(120) NOT NULL UNIQUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (academy_id) REFERENCES academies(id) ON DELETE CASCADE,
+                FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+                FOREIGN KEY (plan_id) REFERENCES plans(id),
+                INDEX idx_academy_created (academy_id, created_at),
+                INDEX idx_customer_created (customer_id, created_at)
+            )
+        `);
+
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS academy_payment_orders (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                academy_id VARCHAR(36) NOT NULL,
+                customer_id INT NOT NULL,
+                plan_id INT NOT NULL,
+                amount INT NOT NULL,
+                currency VARCHAR(10) DEFAULT 'INR',
+                razorpay_order_id VARCHAR(120) NOT NULL UNIQUE,
+                receipt VARCHAR(120) NOT NULL UNIQUE,
+                status VARCHAR(50) DEFAULT 'created',
+                razorpay_payment_id VARCHAR(120) NULL,
+                razorpay_signature VARCHAR(255) NULL,
+                payment_status VARCHAR(50) NULL,
+                is_consumed TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (academy_id) REFERENCES academies(id) ON DELETE CASCADE,
+                FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+                FOREIGN KEY (plan_id) REFERENCES plans(id),
+                INDEX idx_payment_order_academy (academy_id, status),
+                INDEX idx_payment_order_customer (customer_id, created_at)
+            )
+        `);
+
+        await ensureColumnExists('customers', 'password_hash', 'password_hash VARCHAR(255) NULL AFTER phone');
+        await ensureColumnExists('academies', 'status', `status VARCHAR(50) DEFAULT 'active' AFTER access_code`);
+        await ensureColumnExists('users', 'academy_id', 'academy_id VARCHAR(36) NULL AFTER profile_photo');
+
+        // Check if plans exist and initialize/update them
+        const [existingPlans] = await db.query('SELECT COUNT(*) as count FROM plans');
+        if (existingPlans[0].count === 0) {
+            await db.query(`
+                INSERT INTO plans (id, name, max_instructors, max_students, price, description) VALUES 
+                (1, 'Basic', 1, 10, 0, 'Free plan for getting started'),
+                (2, 'Pro', 10, 200, 499, 'Perfect for small academies'),
+                (3, 'Advanced', 25, 1000, 999, 'For growing academies')
+            `);
+        } else {
+            // Update existing plans to ensure correct configuration
+            await db.query(`UPDATE plans SET name = 'Basic', max_instructors = 1, max_students = 10, price = 0, description = 'Free plan for getting started' WHERE id = 1`);
+            await db.query(`UPDATE plans SET name = 'Pro', max_instructors = 10, max_students = 200, price = 499, description = 'Perfect for small academies' WHERE id = 2`);
+            await db.query(`UPDATE plans SET name = 'Advanced', max_instructors = 25, max_students = 1000, price = 999, description = 'For growing academies' WHERE id = 3`);
+        }
+
+        console.log('Access & Subscription tables verified/created');
+    } catch (error) {
+        console.error('Error initializing access tables:', error);
+    }
+}
+
+initializeAccessTables().catch(err => console.error('Failed to initialize access tables:', err));
+
+// Helper function to generate UUID
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+// Helper function to generate access code
+function generateAccessCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+        code += chars.charAt(crypto.randomInt(0, chars.length));
+    }
+    return code;
+}
+
+function normalizeCustomerEmail(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function signAccessOwnerToken(context) {
+    return jwt.sign(
+        {
+            customer_id: Number(context.customer_id),
+            academy_id: String(context.academy_id)
+        },
+        ACCESS_OWNER_JWT_SECRET,
+        { expiresIn: '12h' }
+    );
+}
+
+function getRazorpayCredentials() {
+    const keyId = String(process.env.RAZORPAY_KEY_ID || '').trim();
+    const keySecret = String(process.env.RAZORPAY_KEY_SECRET || '').trim();
+
+    return {
+        keyId,
+        keySecret,
+        ready: Boolean(keyId && keySecret)
+    };
+}
+
+function assertRazorpayConfigured() {
+    const credentials = getRazorpayCredentials();
+    if (!credentials.ready) {
+        const error = new Error('Razorpay live keys are not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to backend/.env.');
+        error.status = 503;
+        throw error;
+    }
+
+    return credentials;
+}
+
+async function razorpayApiRequest(pathname, options = {}) {
+    const credentials = assertRazorpayConfigured();
+    const method = String(options.method || 'GET').toUpperCase();
+    const headers = {
+        Authorization: `Basic ${Buffer.from(`${credentials.keyId}:${credentials.keySecret}`).toString('base64')}`
+    };
+
+    if (options.body !== undefined) {
+        headers['Content-Type'] = 'application/json';
+    }
+
+    const response = await fetch(`${RAZORPAY_API_BASE}${pathname}`, {
+        method,
+        headers,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body)
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const error = new Error(payload.error?.description || payload.description || 'Razorpay request failed');
+        error.status = response.status;
+        error.details = payload;
+        throw error;
+    }
+
+    return payload;
+}
+
+async function createRazorpayOrder(payload) {
+    return razorpayApiRequest('/orders', {
+        method: 'POST',
+        body: payload
+    });
+}
+
+async function fetchRazorpayPayment(paymentId) {
+    return razorpayApiRequest(`/payments/${encodeURIComponent(paymentId)}`, {
+        method: 'GET'
+    });
+}
+
+async function captureRazorpayPayment(paymentId, amount, currency = 'INR') {
+    return razorpayApiRequest(`/payments/${encodeURIComponent(paymentId)}/capture`, {
+        method: 'POST',
+        body: {
+            amount,
+            currency
+        }
+    });
+}
+
+function verifyRazorpaySignature(orderId, paymentId, signature) {
+    const { keySecret } = assertRazorpayConfigured();
+    const expectedSignature = crypto
+        .createHmac('sha256', keySecret)
+        .update(`${orderId}|${paymentId}`)
+        .digest('hex');
+
+    const normalizedSignature = String(signature || '').trim();
+    if (!normalizedSignature || normalizedSignature.length !== expectedSignature.length) {
+        return false;
+    }
+
+    return crypto.timingSafeEqual(
+        Buffer.from(expectedSignature, 'utf8'),
+        Buffer.from(normalizedSignature, 'utf8')
+    );
+}
+
+function formatLegacyPlanName(planName) {
+    return String(planName || '').trim() || 'Basic';
+}
+
+function buildAccessInviteLinks(req, accessCode) {
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const safeCode = encodeURIComponent(String(accessCode || '').trim());
+
+    return {
+        instructor: `${origin}/HTML/index.html?code=${safeCode}&type=instructor`,
+        student: `${origin}/HTML/index.html?code=${safeCode}&type=student`
+    };
+}
+
+function buildAccessUsageMetric(label, current, limit) {
+    const safeCurrent = Number(current || 0);
+    const safeLimit = Number(limit || 0);
+    const percentage = safeLimit > 0 ? Math.min(100, Math.round((safeCurrent / safeLimit) * 100)) : 0;
+    const remaining = safeLimit > 0 ? Math.max(0, safeLimit - safeCurrent) : 0;
+
+    return {
+        label,
+        current: safeCurrent,
+        limit: safeLimit,
+        remaining,
+        percentage,
+        near_limit: safeLimit > 0 && percentage >= 80 && safeCurrent < safeLimit,
+        exceeded: safeLimit > 0 && safeCurrent >= safeLimit
+    };
+}
+
+function buildAccessOwnerSummary(req, context) {
+    return {
+        customer: {
+            id: Number(context.customer_id),
+            name: context.customer_name,
+            email: context.customer_email,
+            phone: context.customer_phone || '',
+            status: context.customer_status || 'active'
+        },
+        academy: {
+            academy_id: context.academy_id,
+            academy_name: context.academy_name,
+            access_code: context.access_code,
+            status: context.academy_status || 'active',
+            created_at: context.academy_created_at,
+            updated_at: context.academy_updated_at
+        },
+        current_plan: {
+            id: Number(context.plan_id || 0),
+            name: formatLegacyPlanName(context.plan_name),
+            price: Number(context.plan_price || 0),
+            max_instructors: Number(context.max_instructors || 0),
+            max_students: Number(context.max_students || 0),
+            description: context.plan_description || ''
+        },
+        invite_links: buildAccessInviteLinks(req, context.access_code)
+    };
+}
+
+async function getAccessOwnerContext(customerId, academyId = null, connection = db) {
+    const params = [customerId];
+    let academyFilter = '';
+
+    if (academyId) {
+        academyFilter = ' AND a.id = ?';
+        params.push(academyId);
+    }
+
+    const [rows] = await connection.query(
+        `SELECT
+            c.id AS customer_id,
+            c.name AS customer_name,
+            c.email AS customer_email,
+            c.phone AS customer_phone,
+            c.password_hash,
+            c.status AS customer_status,
+            a.id AS academy_id,
+            a.academy_name,
+            a.access_code,
+            a.status AS academy_status,
+            a.plan_id,
+            a.created_at AS academy_created_at,
+            a.updated_at AS academy_updated_at,
+            p.name AS plan_name,
+            p.max_instructors,
+            p.max_students,
+            p.price AS plan_price,
+            p.description AS plan_description
+         FROM customers c
+         INNER JOIN academies a ON a.customer_id = c.id
+         LEFT JOIN plans p ON p.id = a.plan_id
+         WHERE c.id = ?${academyFilter}
+         ORDER BY a.created_at DESC, a.id DESC
+         LIMIT 1`,
+        params
+    );
+
+    return rows[0] || null;
+}
+
+async function generateUniqueAccessCode(connection = db) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+        const candidate = generateAccessCode();
+        const [rows] = await connection.query(
+            'SELECT id FROM academies WHERE access_code = ? LIMIT 1',
+            [candidate]
+        );
+
+        if (rows.length === 0) {
+            return candidate;
+        }
+    }
+
+    throw new Error('Unable to generate a unique access code');
+}
+
+async function insertAcademyPayment(connection, payload) {
+    const paymentReference = String(payload.paymentReference || `PAY-${Date.now()}-${Math.floor(Math.random() * 1000000)}`).trim();
+    const currency = String(payload.currency || 'INR').trim() || 'INR';
+
+    await connection.query(
+        `INSERT INTO academy_payments (
+            academy_id,
+            customer_id,
+            plan_id,
+            plan_name,
+            amount,
+            currency,
+            status,
+            payment_reference,
+            created_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+            payload.academyId,
+            payload.customerId,
+            payload.planId,
+            payload.planName,
+            payload.amount,
+            currency,
+            payload.status,
+            paymentReference
+        ]
+    );
+
+    return paymentReference;
+}
+
+async function accessOwnerAuth(req, res, next) {
+    const authorization = String(req.headers.authorization || '').trim();
+    if (!authorization.startsWith('Bearer ')) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const token = authorization.slice('Bearer '.length).trim();
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    let payload;
+    try {
+        payload = jwt.verify(token, ACCESS_OWNER_JWT_SECRET);
+    } catch (error) {
+        return res.status(401).json({ success: false, message: 'Invalid or expired session' });
+    }
+
+    try {
+        const context = await getAccessOwnerContext(payload.customer_id, payload.academy_id);
+        if (!context) {
+            return res.status(401).json({ success: false, message: 'Access owner session is no longer valid' });
+        }
+
+        req.accessOwner = context;
+        req.accessOwnerToken = token;
+        return next();
+    } catch (error) {
+        console.error('Access owner auth error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to validate access owner session' });
+    }
+}
+
+async function fetchLegacyDashboardData(academyId) {
+    const [[academyRows], [instructorRows], [studentRows], [logs]] = await Promise.all([
+        db.query(
+            `SELECT a.*, p.max_instructors, p.max_students, p.name AS plan_name, p.price AS plan_price, p.description
+             FROM academies a
+             LEFT JOIN plans p ON p.id = a.plan_id
+             WHERE a.id = ?`,
+            [academyId]
+        ),
+        db.query(
+            `SELECT COUNT(*) AS count
+             FROM attempt_logs
+             WHERE academy_id = ?
+               AND type = 'instructor'
+               AND status = 'success'`,
+            [academyId]
+        ),
+        db.query(
+            `SELECT COUNT(*) AS count
+             FROM attempt_logs
+             WHERE academy_id = ?
+               AND type = 'student'
+               AND status = 'success'`,
+            [academyId]
+        ),
+        db.query(
+            `SELECT type, status, reason, email, timestamp
+             FROM attempt_logs
+             WHERE academy_id = ?
+             ORDER BY timestamp DESC
+             LIMIT 20`,
+            [academyId]
+        )
+    ]);
+
+    const academy = academyRows[0] || null;
+    const instructorCount = Number(instructorRows[0].count || 0);
+    const studentCount = Number(studentRows[0].count || 0);
+
+    return {
+        academy,
+        instructorCount,
+        studentCount,
+        logs: logs.map((log) => ({
+            type: log.type,
+            status: log.status,
+            reason: log.reason,
+            email: log.email,
+            timestamp: log.timestamp
+        }))
+    };
+}
+
+function normalizeAccessCode(value) {
+    return String(value || '').trim().toUpperCase();
+}
+
+function getAccessRoleLabel(role) {
+    return normalizeRole(role) === 'student' ? 'Student' : 'Instructor';
+}
+
+function buildAccessLimitMessage(role) {
+    const normalizedRole = normalizeRole(role) || 'student';
+    const roleLabel = getAccessRoleLabel(normalizedRole);
+    return `${roleLabel} limit exceeded for the current plan. New ${normalizedRole} registrations and logins are blocked for this access code until the owner upgrades the plan.`;
+}
+
+function buildUseAnotherAccessCodeMessage(role) {
+    const normalizedRole = normalizeRole(role) || 'student';
+    const roleLabel = getAccessRoleLabel(normalizedRole);
+    return `${roleLabel} access for this academy code is already full. Please use another access code or contact the academy owner.`;
+}
+
+async function findAcademyByAccessCode(accessCode, connection = db) {
+    const normalizedCode = normalizeAccessCode(accessCode);
+    if (!normalizedCode) {
+        return null;
+    }
+
+    const [rows] = await connection.query(
+        `SELECT
+            a.id,
+            a.customer_id,
+            a.plan_id,
+            a.academy_name,
+            a.access_code,
+            p.max_instructors,
+            p.max_students,
+            p.name AS plan_name
+         FROM academies a
+         LEFT JOIN plans p ON p.id = a.plan_id
+         WHERE a.access_code = ?
+         LIMIT 1`,
+        [normalizedCode]
+    );
+
+    return rows[0] || null;
+}
+
+async function getAcademyRoleCapacity(academyId, role, connection = db) {
+    const normalizedRole = normalizeRole(role);
+    if (!academyId || !normalizedRole) {
+        return {
+            current: 0,
+            limit: 0
+        };
+    }
+
+    const limitColumn = normalizedRole === 'student' ? 'max_students' : 'max_instructors';
+    const [rows] = await connection.query(
+        `SELECT
+            p.${limitColumn} AS seat_limit,
+            (SELECT COUNT(*) FROM users WHERE academy_id = ? AND role = ?) AS current_count
+         FROM academies a
+         LEFT JOIN plans p ON p.id = a.plan_id
+         WHERE a.id = ?
+         LIMIT 1`,
+        [academyId, normalizedRole, academyId]
+    );
+
+    const row = rows[0] || {};
+    return {
+        current: Number(row.current_count || 0),
+        limit: Number(row.seat_limit || 0)
+    };
+}
+
+async function getAcademyRoleSeatState(academyId, role, connection = db) {
+    const normalizedRole = normalizeRole(role);
+    if (!academyId || !normalizedRole) {
+        return {
+            current: 0,
+            limit: 0,
+            activeCount: 0,
+            overflowCount: 0,
+            activeUserIds: new Set(),
+            activeUsers: [],
+            allUsers: []
+        };
+    }
+
+    const capacity = await getAcademyRoleCapacity(academyId, normalizedRole, connection);
+    const [rows] = await connection.query(
+        `SELECT id, email, created_at
+         FROM users
+         WHERE academy_id = ?
+           AND role = ?
+         ORDER BY created_at ASC, id ASC`,
+        [academyId, normalizedRole]
+    );
+
+    const limit = Number(capacity.limit || 0);
+    const activeUsers = limit > 0 ? rows.slice(0, limit) : rows;
+    const activeUserIds = new Set(activeUsers.map((user) => Number(user.id)).filter(Boolean));
+
+    return {
+        current: rows.length,
+        limit,
+        activeCount: activeUsers.length,
+        overflowCount: Math.max(0, rows.length - activeUsers.length),
+        activeUserIds,
+        activeUsers,
+        allUsers: rows
+    };
+}
+
+async function getUserSeatAccessState(userId, role, connection = db) {
+    const normalizedRole = normalizeRole(role);
+    const normalizedUserId = asPositiveInt(userId);
+    if (!normalizedUserId || !normalizedRole) {
+        return {
+            allowed: false,
+            academyId: '',
+            seatState: null
+        };
+    }
+
+    const [rows] = await connection.query(
+        `SELECT id, academy_id
+         FROM users
+         WHERE id = ?
+           AND role = ?
+         LIMIT 1`,
+        [normalizedUserId, normalizedRole]
+    );
+
+    const user = rows[0] || null;
+    const academyId = String(user?.academy_id || '').trim();
+    if (!user || !academyId) {
+        return {
+            allowed: false,
+            academyId,
+            seatState: null
+        };
+    }
+
+    const seatState = await getAcademyRoleSeatState(academyId, normalizedRole, connection);
+    return {
+        allowed: seatState.activeUserIds.has(normalizedUserId),
+        academyId,
+        seatState
+    };
+}
+
+async function logAccessAttempt(academyId, type, status, reason, email, connection = db) {
+    const normalizedType = normalizeRole(type);
+    if (!academyId || !normalizedType) {
+        return;
+    }
+
+    try {
+        await connection.query(
+            `INSERT INTO attempt_logs (academy_id, type, status, reason, email, timestamp)
+             VALUES (?, ?, ?, ?, ?, NOW())`,
+            [academyId, normalizedType, status === 'failed' ? 'failed' : 'success', reason || null, email || null]
+        );
+    } catch (error) {
+        console.error('Access attempt log error:', error);
+    }
+}
+
+// ACCESS OWNER - Register academy owner and starter academy
+app.post('/api/access/register', async (req, res) => {
+    const customerName = String(req.body.customer_name || req.body.name || '').trim();
+    const customerEmail = normalizeCustomerEmail(req.body.customer_email || req.body.email);
+    const phone = String(req.body.phone || '').trim();
+    const password = String(req.body.password || '');
+    const academyName = String(req.body.academy_name || req.body.academyName || '').trim();
+
+    if (!customerName || !customerEmail || !password || !academyName) {
+        return res.status(400).json({
+            success: false,
+            message: 'Academy name, customer name, email, and password are required'
+        });
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const [existingCustomers] = await connection.query(
+            'SELECT id, password_hash FROM customers WHERE email = ? LIMIT 1',
+            [customerEmail]
+        );
+
+        const passwordHash = await bcrypt.hash(password, 10);
+        let customerId = null;
+        let academyId = null;
+
+        if (existingCustomers.length > 0) {
+            customerId = Number(existingCustomers[0].id);
+
+            if (existingCustomers[0].password_hash) {
+                await connection.rollback();
+                return res.status(409).json({
+                    success: false,
+                    message: 'This customer already has access owner credentials. Please login instead.'
+                });
+            }
+
+            await connection.query(
+                `UPDATE customers
+                 SET name = ?, phone = ?, password_hash = ?, status = 'active'
+                 WHERE id = ?`,
+                [customerName, phone || null, passwordHash, customerId]
+            );
+
+            const [academyRows] = await connection.query(
+                'SELECT id FROM academies WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT 1',
+                [customerId]
+            );
+
+            if (academyRows.length > 0) {
+                academyId = academyRows[0].id;
+            }
+        } else {
+            const [customerResult] = await connection.query(
+                `INSERT INTO customers (name, email, phone, password_hash, status, created_at)
+                 VALUES (?, ?, ?, ?, 'active', NOW())`,
+                [customerName, customerEmail, phone || null, passwordHash]
+            );
+            customerId = Number(customerResult.insertId);
+        }
+
+        if (!academyId) {
+            academyId = generateUUID();
+            const accessCode = await generateUniqueAccessCode(connection);
+
+            await connection.query(
+                `INSERT INTO academies (
+                    id,
+                    customer_id,
+                    plan_id,
+                    academy_name,
+                    access_code,
+                    status,
+                    instructor_count,
+                    student_count,
+                    created_at,
+                    updated_at
+                 )
+                 VALUES (?, ?, 1, ?, ?, 'active', 0, 0, NOW(), NOW())`,
+                [academyId, customerId, academyName, accessCode]
+            );
+        }
+
+        const context = await getAccessOwnerContext(customerId, academyId, connection);
+        await connection.commit();
+
+        return res.status(201).json({
+            success: true,
+            message: 'Access owner registered successfully',
+            token: signAccessOwnerToken(context),
+            summary: buildAccessOwnerSummary(req, context)
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Access owner registration error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to register access owner',
+            error: error.message
+        });
+    } finally {
+        connection.release();
+    }
+});
+
+// ACCESS OWNER - Login
+app.post('/api/access/login', async (req, res) => {
+    const customerEmail = normalizeCustomerEmail(req.body.customer_email || req.body.email);
+    const password = String(req.body.password || '');
+
+    if (!customerEmail || !password) {
+        return res.status(400).json({
+            success: false,
+            message: 'Email and password are required'
+        });
+    }
+
+    try {
+        const [customerRows] = await db.query(
+            'SELECT id, password_hash FROM customers WHERE email = ? LIMIT 1',
+            [customerEmail]
+        );
+
+        if (customerRows.length === 0 || !customerRows[0].password_hash) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
+        }
+
+        const passwordMatches = await bcrypt.compare(password, customerRows[0].password_hash);
+        if (!passwordMatches) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
+        }
+
+        const context = await getAccessOwnerContext(customerRows[0].id);
+        if (!context) {
+            return res.status(404).json({
+                success: false,
+                message: 'No academy workspace found for this account'
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: 'Login successful',
+            token: signAccessOwnerToken(context),
+            summary: buildAccessOwnerSummary(req, context)
+        });
+    } catch (error) {
+        console.error('Access owner login error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to login access owner',
+            error: error.message
+        });
+    }
+});
+
+// ACCESS OWNER - Session summary
+app.get('/api/access/me', accessOwnerAuth, (req, res) => {
+    return res.json({
+        success: true,
+        summary: buildAccessOwnerSummary(req, req.accessOwner)
+    });
+});
+
+// ACCESS OWNER - Private dashboard
+app.get('/api/access/dashboard', accessOwnerAuth, async (req, res) => {
+    try {
+        const academyId = req.accessOwner.academy_id;
+
+        const [
+            instructorSeatState,
+            studentSeatState,
+            [paymentRows],
+            [planRows],
+            [attemptRows]
+        ] = await Promise.all([
+            getAcademyRoleSeatState(academyId, 'instructor'),
+            getAcademyRoleSeatState(academyId, 'student'),
+            db.query(
+                `SELECT id, plan_id, plan_name, amount, currency, status, payment_reference, created_at
+                 FROM academy_payments
+                 WHERE academy_id = ?
+                 ORDER BY created_at DESC, id DESC
+                 LIMIT 12`,
+                [academyId]
+            ),
+            db.query(
+                `SELECT id, name, max_instructors, max_students, price, description
+                 FROM plans
+                 ORDER BY CASE WHEN price = 0 THEN 999999 ELSE price END ASC, id ASC`
+            ),
+            db.query(
+                `SELECT type, status, reason, email, timestamp
+                 FROM attempt_logs
+                 WHERE academy_id = ?
+                 ORDER BY timestamp DESC
+                 LIMIT 20`,
+                [academyId]
+            )
+        ]);
+
+        const instructorCount = Number(instructorSeatState.activeCount || 0);
+        const studentCount = Number(studentSeatState.activeCount || 0);
+        const instructorUsage = buildAccessUsageMetric('Instructor', instructorCount, req.accessOwner.max_instructors);
+        const studentUsage = buildAccessUsageMetric('Student', studentCount, req.accessOwner.max_students);
+        const warnings = [];
+
+        if (Number(instructorSeatState.overflowCount || 0) > 0) {
+            warnings.push('Instructor access code limit exceeded. Extra instructor accounts are blocked and must use another access code unless the owner upgrades the plan.');
+        } else if (instructorUsage.exceeded) {
+            warnings.push('Instructor limit exceeded for the current plan. New instructor registrations and logins with this access code are blocked until you upgrade the plan.');
+        } else if (instructorUsage.near_limit) {
+            warnings.push('Instructor seat usage is above 80% of the current plan.');
+        }
+
+        if (Number(studentSeatState.overflowCount || 0) > 0) {
+            warnings.push('Student access code limit exceeded. Extra student accounts are blocked and must use another access code unless the owner upgrades the plan.');
+        } else if (studentUsage.exceeded) {
+            warnings.push('Student limit exceeded for the current plan. New student registrations and logins with this access code are blocked until you upgrade the plan.');
+        } else if (studentUsage.near_limit) {
+            warnings.push('Student seat usage is above 80% of the current plan.');
+        }
+
+        return res.json({
+            success: true,
+            summary: buildAccessOwnerSummary(req, req.accessOwner),
+            statistics: {
+                active_instructors: instructorCount,
+                active_students: studentCount,
+                instructor_limit: Number(req.accessOwner.max_instructors || 0),
+                student_limit: Number(req.accessOwner.max_students || 0)
+            },
+            usage: {
+                instructors: instructorUsage,
+                students: studentUsage
+            },
+            warnings,
+            plans: planRows.map((plan) => ({
+                id: Number(plan.id),
+                name: plan.name,
+                max_instructors: Number(plan.max_instructors || 0),
+                max_students: Number(plan.max_students || 0),
+                price: Number(plan.price || 0),
+                description: plan.description || ''
+            })),
+            payments: paymentRows.map((payment) => ({
+                id: Number(payment.id),
+                plan_id: Number(payment.plan_id || 0),
+                plan_name: payment.plan_name,
+                amount: Number(payment.amount || 0),
+                currency: payment.currency || 'INR',
+                status: payment.status,
+                payment_reference: payment.payment_reference,
+                created_at: payment.created_at
+            })),
+            activity_logs: attemptRows.map((log) => ({
+                type: log.type,
+                status: log.status,
+                reason: log.reason,
+                email: log.email,
+                timestamp: log.timestamp
+            }))
+        });
+    } catch (error) {
+        console.error('Access owner dashboard error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to load access owner dashboard',
+            error: error.message
+        });
+    }
+});
+
+// ACCESS OWNER - Create a Razorpay order for a paid plan
+app.post('/api/access/orders', accessOwnerAuth, async (req, res) => {
+    const planId = asPositiveInt(req.body.plan_id || req.body.planId);
+    if (!planId) {
+        return res.status(400).json({
+            success: false,
+            message: 'A valid plan ID is required'
+        });
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const [planRows] = await connection.query(
+            `SELECT id, name, max_instructors, max_students, price, description
+             FROM plans
+             WHERE id = ?
+             LIMIT 1`,
+            [planId]
+        );
+
+        if (planRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({
+                success: false,
+                message: 'Selected plan was not found'
+            });
+        }
+
+        const plan = planRows[0];
+        const planPrice = Number(plan.price || 0);
+        if (planPrice <= 0) {
+            await connection.rollback();
+            return res.status(400).json({
+                success: false,
+                message: 'The selected plan does not require payment.'
+            });
+        }
+
+        const currentPlanId = Number(req.accessOwner.plan_id || 0);
+        if (currentPlanId === Number(plan.id)) {
+            await connection.rollback();
+            return res.status(409).json({
+                success: false,
+                message: `${plan.name} is already the active plan.`
+            });
+        }
+
+        const amountInPaise = planPrice * 100;
+        const receipt = `rcpt_${String(req.accessOwner.academy_id).slice(0, 8)}_${Date.now()}`;
+        const order = await createRazorpayOrder({
+            amount: amountInPaise,
+            currency: 'INR',
+            receipt,
+            notes: {
+                academy_id: String(req.accessOwner.academy_id),
+                customer_id: String(req.accessOwner.customer_id),
+                plan_id: String(plan.id)
+            }
+        });
+
+        await connection.query(
+            `INSERT INTO academy_payment_orders (
+                academy_id,
+                customer_id,
+                plan_id,
+                amount,
+                currency,
+                razorpay_order_id,
+                receipt,
+                status,
+                created_at,
+                updated_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'created', NOW(), NOW())`,
+            [
+                req.accessOwner.academy_id,
+                req.accessOwner.customer_id,
+                Number(plan.id),
+                Number(order.amount || amountInPaise),
+                order.currency || 'INR',
+                order.id,
+                order.receipt || receipt
+            ]
+        );
+
+        await connection.commit();
+
+        return res.json({
+            success: true,
+            key_id: assertRazorpayConfigured().keyId,
+            order: {
+                id: order.id,
+                amount: Number(order.amount || amountInPaise),
+                currency: order.currency || 'INR',
+                receipt: order.receipt || receipt
+            },
+            plan: {
+                id: Number(plan.id),
+                name: plan.name,
+                price: planPrice
+            }
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Create Razorpay order error:', error);
+        return res.status(error.status || 500).json({
+            success: false,
+            message: error.message || 'Failed to create payment order',
+            error: error.details || error.message
+        });
+    } finally {
+        connection.release();
+    }
+});
+
+// ACCESS OWNER - Change or renew plan
+app.post('/api/access/subscription', accessOwnerAuth, async (req, res) => {
+    const planId = asPositiveInt(req.body.plan_id || req.body.planId);
+    if (!planId) {
+        return res.status(400).json({
+            success: false,
+            message: 'A valid plan ID is required'
+        });
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const [planRows] = await connection.query(
+            `SELECT id, name, max_instructors, max_students, price, description
+             FROM plans
+             WHERE id = ?
+             LIMIT 1`,
+            [planId]
+        );
+
+        if (planRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({
+                success: false,
+                message: 'Selected plan was not found'
+            });
+        }
+
+        const plan = planRows[0];
+        const currentPlanId = Number(req.accessOwner.plan_id || 0);
+
+        if (currentPlanId === Number(plan.id)) {
+            await connection.rollback();
+            return res.json({
+                success: true,
+                message: `${plan.name} is already the active plan.`,
+                summary: buildAccessOwnerSummary(req, req.accessOwner)
+            });
+        }
+
+        let verifiedPaymentOrder = null;
+        if (Number(plan.price || 0) > 0) {
+            const [paymentOrderRows] = await connection.query(
+                `SELECT id, razorpay_order_id, razorpay_payment_id, currency
+                 FROM academy_payment_orders
+                 WHERE academy_id = ?
+                   AND customer_id = ?
+                   AND plan_id = ?
+                   AND status = 'verified'
+                   AND is_consumed = 0
+                 ORDER BY updated_at DESC, id DESC
+                 LIMIT 1`,
+                [
+                    req.accessOwner.academy_id,
+                    req.accessOwner.customer_id,
+                    Number(plan.id)
+                ]
+            );
+
+            if (paymentOrderRows.length === 0) {
+                await connection.rollback();
+                return res.status(402).json({
+                    success: false,
+                    message: `Complete payment for the ${plan.name} plan before activating it.`
+                });
+            }
+
+            verifiedPaymentOrder = paymentOrderRows[0];
+        }
+
+        await connection.query(
+            `UPDATE academies
+             SET plan_id = ?, status = 'active', updated_at = NOW()
+             WHERE id = ?
+               AND customer_id = ?`,
+            [plan.id, req.accessOwner.academy_id, req.accessOwner.customer_id]
+        );
+
+        const paymentReference = await insertAcademyPayment(connection, {
+            academyId: req.accessOwner.academy_id,
+            customerId: req.accessOwner.customer_id,
+            planId: Number(plan.id),
+            planName: plan.name,
+            amount: Number(plan.price || 0),
+            currency: verifiedPaymentOrder?.currency || 'INR',
+            status: 'completed',
+            paymentReference: verifiedPaymentOrder?.razorpay_payment_id || verifiedPaymentOrder?.razorpay_order_id
+        });
+
+        if (verifiedPaymentOrder) {
+            await connection.query(
+                `UPDATE academy_payment_orders
+                 SET status = 'consumed',
+                     is_consumed = 1,
+                     updated_at = NOW()
+                 WHERE id = ?`,
+                [verifiedPaymentOrder.id]
+            );
+        }
+
+        const updatedContext = await getAccessOwnerContext(
+            req.accessOwner.customer_id,
+            req.accessOwner.academy_id,
+            connection
+        );
+
+        await connection.commit();
+
+        return res.json({
+            success: true,
+            message: `${plan.name} plan activated successfully.`,
+            payment_reference: paymentReference,
+            summary: buildAccessOwnerSummary(req, updatedContext)
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Access owner subscription error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update subscription plan',
+            error: error.message
+        });
+    } finally {
+        connection.release();
+    }
+});
+
+// PAYMENT VERIFICATION - Verify Razorpay payment
+app.post('/api/access/verify-payment', accessOwnerAuth, async (req, res) => {
+    const razorpayOrderId = String(req.body.razorpay_order_id || '').trim();
+    const razorpayPaymentId = String(req.body.razorpay_payment_id || '').trim();
+    const razorpaySignature = String(req.body.razorpay_signature || '').trim();
+    const planId = asPositiveInt(req.body.plan_id || req.body.planId);
+
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !planId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Order ID, payment ID, signature, and plan ID are required'
+        });
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+        const [paymentOrderRows] = await connection.query(
+            `SELECT id, amount, currency, plan_id, razorpay_order_id, status, is_consumed
+             FROM academy_payment_orders
+             WHERE academy_id = ?
+               AND customer_id = ?
+               AND razorpay_order_id = ?
+             LIMIT 1`,
+            [
+                req.accessOwner.academy_id,
+                req.accessOwner.customer_id,
+                razorpayOrderId
+            ]
+        );
+
+        if (paymentOrderRows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Matching payment order was not found'
+            });
+        }
+
+        const paymentOrder = paymentOrderRows[0];
+        if (Number(paymentOrder.plan_id) !== Number(planId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'The payment order does not match the selected plan'
+            });
+        }
+
+        if (Number(paymentOrder.is_consumed || 0) === 1) {
+            return res.status(409).json({
+                success: false,
+                message: 'This payment has already been used to activate a plan'
+            });
+        }
+
+        const signatureIsValid = verifyRazorpaySignature(
+            paymentOrder.razorpay_order_id,
+            razorpayPaymentId,
+            razorpaySignature
+        );
+
+        if (!signatureIsValid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Payment signature verification failed'
+            });
+        }
+
+        let payment = await fetchRazorpayPayment(razorpayPaymentId);
+        if (String(payment.order_id || '').trim() !== paymentOrder.razorpay_order_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Payment order mismatch received from Razorpay'
+            });
+        }
+
+        if (Number(payment.amount || 0) !== Number(paymentOrder.amount || 0)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Paid amount does not match the selected plan amount'
+            });
+        }
+
+        let paymentStatus = String(payment.status || '').trim().toLowerCase();
+        if (paymentStatus === 'authorized') {
+            payment = await captureRazorpayPayment(
+                razorpayPaymentId,
+                Number(paymentOrder.amount || 0),
+                paymentOrder.currency || 'INR'
+            );
+            paymentStatus = String(payment.status || '').trim().toLowerCase();
+        }
+
+        if (paymentStatus !== 'captured') {
+            return res.status(400).json({
+                success: false,
+                message: `Payment is not captured yet. Current Razorpay status: ${paymentStatus || 'unknown'}.`
+            });
+        }
+
+        await connection.query(
+            `UPDATE academy_payment_orders
+             SET status = 'verified',
+                 razorpay_payment_id = ?,
+                 razorpay_signature = ?,
+                 payment_status = ?,
+                 updated_at = NOW()
+             WHERE id = ?`,
+            [
+                razorpayPaymentId,
+                razorpaySignature,
+                paymentStatus,
+                paymentOrder.id
+            ]
+        );
+
+        return res.json({
+            success: true,
+            message: 'Payment verified successfully',
+            payment_id: razorpayPaymentId,
+            payment_status: paymentStatus
+        });
+    } catch (error) {
+        console.error('Payment verification error:', error);
+        return res.status(error.status || 400).json({
+            success: false,
+            message: error.message || 'Payment verification failed',
+            error: error.details || error.message
+        });
+    } finally {
+        connection.release();
+    }
+});
+
+// ACCESS OWNER - Permanently terminate the current academy workspace
+app.delete('/api/access/terminate', accessOwnerAuth, async (req, res) => {
+    const academyId = String(req.accessOwner.academy_id || '').trim();
+    const customerId = Number(req.accessOwner.customer_id || 0);
+
+    if (!academyId || !customerId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Unable to resolve the academy account for termination'
+        });
+    }
+
+    const connection = await db.getConnection();
+    const coverAssets = new Set();
+    const videoAssets = new Set();
+
+    try {
+        await connection.beginTransaction();
+
+        const [userRows] = await connection.query(
+            `SELECT id, email, role
+             FROM users
+             WHERE academy_id = ?`,
+            [academyId]
+        );
+
+        const userIds = userRows.map((user) => Number(user.id)).filter(Boolean);
+        const instructorIds = userRows
+            .filter((user) => String(user.role || '').trim().toLowerCase() === 'instructor')
+            .map((user) => Number(user.id))
+            .filter(Boolean);
+        const studentEmails = userRows
+            .filter((user) => String(user.role || '').trim().toLowerCase() === 'student')
+            .map((user) => String(user.email || '').trim())
+            .filter(Boolean);
+
+        let courseRows = [];
+        let courseIds = [];
+        let videoIds = [];
+
+        if (instructorIds.length > 0) {
+            const [courses] = await connection.query(
+                `SELECT id, cover_path, video_path
+                 FROM courses
+                 WHERE instructor_id IN (?)`,
+                [instructorIds]
+            );
+            courseRows = courses;
+            courseIds = courseRows.map((course) => Number(course.id)).filter(Boolean);
+
+            for (const course of courseRows) {
+                if (course.cover_path) {
+                    coverAssets.add(String(course.cover_path).trim());
+                }
+                if (course.video_path) {
+                    videoAssets.add(String(course.video_path).trim());
+                }
+            }
+        }
+
+        if (courseIds.length > 0) {
+            const [videos] = await connection.query(
+                `SELECT id, video_url
+                 FROM videos
+                 WHERE course_id IN (?)`,
+                [courseIds]
+            );
+            videoIds = videos.map((video) => Number(video.id)).filter(Boolean);
+
+            for (const video of videos) {
+                if (video.video_url) {
+                    videoAssets.add(String(video.video_url).trim());
+                }
+            }
+
+            await connection.query('DELETE FROM enrollments WHERE course_id IN (?)', [courseIds]);
+            await connection.query('DELETE FROM course_views WHERE course_id IN (?)', [courseIds]);
+            if (videoIds.length > 0) {
+                await connection.query('DELETE FROM course_video_progress WHERE video_id IN (?)', [videoIds]);
+            }
+            await connection.query('DELETE FROM course_videos WHERE course_id IN (?)', [courseIds]);
+            await connection.query('DELETE FROM videos WHERE course_id IN (?)', [courseIds]);
+            await connection.query('DELETE FROM courses WHERE id IN (?)', [courseIds]);
+        }
+
+        if (studentEmails.length > 0) {
+            await connection.query('DELETE FROM enrollments WHERE student_email IN (?)', [studentEmails]);
+            await connection.query('DELETE FROM course_views WHERE student_email IN (?)', [studentEmails]);
+            await connection.query('DELETE FROM course_video_progress WHERE student_email IN (?)', [studentEmails]);
+        }
+
+        if (instructorIds.length > 0) {
+            await connection.query('DELETE FROM messages WHERE instructor_id IN (?)', [instructorIds]);
+        }
+
+        if (userIds.length > 0) {
+            await connection.query('DELETE FROM notifications WHERE user_id IN (?)', [userIds]);
+            await connection.query('DELETE FROM password_reset_otps WHERE user_id IN (?)', [userIds]);
+            await connection.query('DELETE FROM group_messages WHERE sender_id IN (?)', [userIds]);
+            await connection.query(
+                'DELETE FROM chat_messages WHERE sender_id IN (?) OR recipient_id IN (?)',
+                [userIds, userIds]
+            );
+            await connection.query('DELETE FROM users WHERE id IN (?)', [userIds]);
+        }
+
+        await connection.query('DELETE FROM academies WHERE id = ? AND customer_id = ?', [academyId, customerId]);
+
+        const [remainingAcademyRows] = await connection.query(
+            'SELECT id FROM academies WHERE customer_id = ? LIMIT 1',
+            [customerId]
+        );
+
+        if (remainingAcademyRows.length === 0) {
+            await connection.query('DELETE FROM customers WHERE id = ?', [customerId]);
+        }
+
+        await connection.commit();
+
+        for (const coverPath of coverAssets) {
+            try {
+                await deleteStoredFile(coverPath);
+            } catch (error) {
+                console.error(`Failed to delete course cover during academy termination: ${coverPath}`, error);
+            }
+        }
+
+        for (const videoPath of videoAssets) {
+            try {
+                await deleteVideoStorageAsset(videoPath);
+            } catch (error) {
+                console.error(`Failed to delete video asset during academy termination: ${videoPath}`, error);
+            }
+        }
+
+        return res.json({
+            success: true,
+            message: 'Academy account terminated successfully. Linked users, access, courses, and uploaded videos were deleted permanently.'
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Access owner termination error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to terminate the academy account',
+            error: error.message
+        });
+    } finally {
+        connection.release();
+    }
+});
+
+// SUBSCRIBE - Create subscription and generate access code
+app.post('/api/subscribe', async (req, res) => {
+    try {
+        const { plan_id, customer_name, customer_email, academy_name } = req.body;
+
+        if (!plan_id || !customer_name || !customer_email || !academy_name) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Plan ID, customer name, email, and academy name are required' 
+            });
+        }
+
+        // Check if email already exists
+        const [existingCustomer] = await db.query(
+            'SELECT id FROM customers WHERE email = ?',
+            [customer_email]
+        );
+
+        let customerId;
+
+        if (existingCustomer.length > 0) {
+            customerId = existingCustomer[0].id;
+        } else {
+            // Create new customer
+            const [customerResult] = await db.query(
+                'INSERT INTO customers (name, email, status, created_at) VALUES (?, ?, ?, NOW())',
+                [customer_name, customer_email, 'active']
+            );
+            customerId = customerResult.insertId;
+        }
+
+        // Generate academy ID and access code
+        const academyId = generateUUID();
+        const accessCode = await generateUniqueAccessCode();
+
+        // Create academy
+        const [planResult] = await db.query(
+            'SELECT name FROM plans WHERE id = ?',
+            [plan_id]
+        );
+
+        if (planResult.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Invalid plan ID' 
+            });
+        }
+
+        const planName = planResult[0].name;
+
+        await db.query(
+            `INSERT INTO academies (id, customer_id, plan_id, academy_name, access_code, instructor_count, student_count, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, ?, 0, 0, NOW(), NOW())`,
+            [academyId, customerId, plan_id, academy_name, accessCode]
+        );
+
+        // Return success with academy details
+        return res.status(201).json({
+            success: true,
+            message: 'Subscription created successfully',
+            academy: {
+                academy_id: academyId,
+                access_code: accessCode,
+                plan_name: planName,
+                academy_name: academy_name,
+                customer_name: customer_name,
+                customer_email: customer_email
+            }
+        });
+
+    } catch (error) {
+        console.error('Subscription error:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to create subscription',
+            error: error.message 
+        });
+    }
+});
+
+// DASHBOARD - Get academy dashboard data
+app.get('/api/dashboard/:academy_id', async (req, res) => {
+    try {
+        const academyId = req.params.academy_id;
+
+        if (!academyId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Academy ID is required' 
+            });
+        }
+
+        // Get academy and plan info
+        const [academies] = await db.query(
+            `SELECT a.*, p.max_instructors, p.max_students, p.name as plan_name
+             FROM academies a
+             LEFT JOIN plans p ON p.id = a.plan_id
+             WHERE a.id = ?`,
+            [academyId]
+        );
+
+        if (academies.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Academy not found' 
+            });
+        }
+
+        const academy = academies[0];
+
+        // Get instructor count
+        const [instructorCountResult] = await db.query(
+            'SELECT COUNT(*) as count FROM attempt_logs WHERE academy_id = ? AND type = "instructor" AND status = "success"',
+            [academyId]
+        );
+        const instructorCount = instructorCountResult[0].count || 0;
+
+        // Get student count
+        const [studentCountResult] = await db.query(
+            'SELECT COUNT(*) as count FROM attempt_logs WHERE academy_id = ? AND type = "student" AND status = "success"',
+            [academyId]
+        );
+        const studentCount = studentCountResult[0].count || 0;
+
+        // Get attempt logs
+        const [logs] = await db.query(
+            `SELECT type, status, reason, email, timestamp 
+             FROM attempt_logs 
+             WHERE academy_id = ? 
+             ORDER BY timestamp DESC 
+             LIMIT 20`,
+            [academyId]
+        );
+
+        return res.json({
+            success: true,
+            data: {
+                academy_id: academyId,
+                academy_name: academy.academy_name,
+                plan_name: academy.plan_name,
+                instructor_count: instructorCount,
+                student_count: studentCount,
+                max_instructors: academy.max_instructors || 10,
+                max_students: academy.max_students || 200,
+                attempt_logs: logs.map(log => ({
+                    type: log.type,
+                    status: log.status,
+                    reason: log.reason,
+                    email: log.email,
+                    timestamp: log.timestamp
+                }))
+            }
+        });
+
+    } catch (error) {
+        console.error('Dashboard fetch error:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to load dashboard',
+            error: error.message 
+        });
+    }
+});
+
+// VALIDATE ACCESS - Check access code and track registration attempts
+app.post('/api/validate-access', async (req, res) => {
+    try {
+        const { access_code, email, type } = req.body;
+
+        if (!access_code || !email || !type) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Access code, email, and type (student/instructor) are required' 
+            });
+        }
+
+        // Find academy by access code
+        const [academies] = await db.query(
+            `SELECT a.*, p.max_instructors, p.max_students, p.name AS plan_name
+             FROM academies a
+             LEFT JOIN plans p ON p.id = a.plan_id
+             WHERE a.access_code = ?`,
+            [access_code]
+        );
+
+        if (academies.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Invalid access code' 
+            });
+        }
+
+        const academy = academies[0];
+
+        // Check limits based on type
+        let currentCount = 0;
+        let maxCount = 0;
+        let limitExceeded = false;
+        let reason = '';
+
+        if (type === 'instructor') {
+            const [countResult] = await db.query(
+                'SELECT COUNT(*) as count FROM attempt_logs WHERE academy_id = ? AND type = "instructor" AND status = "success"',
+                [academy.id]
+            );
+            currentCount = countResult[0].count || 0;
+            maxCount = academy.max_instructors || 10;
+            limitExceeded = currentCount >= maxCount;
+            reason = limitExceeded ? `Instructor limit (${maxCount}) exceeded` : '';
+        } else if (type === 'student') {
+            const [countResult] = await db.query(
+                'SELECT COUNT(*) as count FROM attempt_logs WHERE academy_id = ? AND type = "student" AND status = "success"',
+                [academy.id]
+            );
+            currentCount = countResult[0].count || 0;
+            maxCount = academy.max_students || 200;
+            limitExceeded = currentCount >= maxCount;
+            reason = limitExceeded ? `Student limit (${maxCount}) exceeded` : '';
+        }
+
+        // Log the attempt
+        const status = limitExceeded ? 'failed' : 'success';
+        await db.query(
+            'INSERT INTO attempt_logs (academy_id, type, status, reason, email, timestamp) VALUES (?, ?, ?, ?, ?, NOW())',
+            [academy.id, type, status, reason, email]
+        );
+
+        if (limitExceeded) {
+            return res.status(403).json({ 
+                success: false, 
+                message: reason,
+                current_count: currentCount,
+                max_count: maxCount
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: 'Access granted',
+            academy: {
+                academy_id: academy.id,
+                academy_name: academy.academy_name,
+                plan_name: academy.plan_name,
+                current_count: currentCount + 1,
+                max_count: maxCount
+            }
+        });
+
+    } catch (error) {
+        console.error('Access validation error:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to validate access',
+            error: error.message 
+        });
+    }
+});
+
 app.use((req, res) => {
     const wantsJson = (req.headers.accept && req.headers.accept.includes('application/json')) ||
         req.path.startsWith('/api') ||
@@ -3497,7 +5481,7 @@ app.use((req, res) => {
         req.method !== 'GET';
 
     if (wantsJson) {
-        return res.status(404).json({ 
+        return res.status(404).json({
             message: 'Route not found',
             details: {
                 path: req.path,
@@ -3506,15 +5490,17 @@ app.use((req, res) => {
         });
     }
 
-    // For HTML requests, try to serve index.html as fallback
-    res.status(404).sendFile(path.join(__dirname, '..', 'HTML', 'index.html')).catch(() => {
-        res.status(404).json({ 
-            message: 'Route not found',
-            path: req.path
-        });
+    return res.status(404).sendFile(path.join(__dirname, '..', 'HTML', 'index.html'), (error) => {
+        if (error) {
+            res.status(404).json({
+                message: 'Route not found',
+                path: req.path
+            });
+        }
     });
 });
 
 app.listen(port, () => {
     console.log(`Backend server listening on http://localhost:${port}`);
 });
+
