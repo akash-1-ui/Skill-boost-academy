@@ -54,6 +54,9 @@ async function initializeDatabase() {
                 branch VARCHAR(255),
                 profile_photo LONGTEXT,
                 academy_id VARCHAR(36),
+                academy_access_status VARCHAR(20) NOT NULL DEFAULT 'active',
+                academy_access_last_login_at DATETIME NULL,
+                academy_access_restricted_at DATETIME NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -64,6 +67,15 @@ async function initializeDatabase() {
         await ensureColumnExists('users', 'branch', 'branch VARCHAR(255) AFTER expertise');
         await ensureColumnExists('users', 'profile_photo', 'profile_photo LONGTEXT AFTER branch');
         await ensureColumnExists('users', 'academy_id', 'academy_id VARCHAR(36) NULL AFTER profile_photo');
+        await ensureColumnExists('users', 'academy_access_status', `academy_access_status VARCHAR(20) NOT NULL DEFAULT 'active' AFTER academy_id`);
+        await ensureColumnExists('users', 'academy_access_last_login_at', 'academy_access_last_login_at DATETIME NULL AFTER academy_access_status');
+        await ensureColumnExists('users', 'academy_access_restricted_at', 'academy_access_restricted_at DATETIME NULL AFTER academy_access_last_login_at');
+        await promisePool.query(`
+            UPDATE users
+            SET academy_access_status = 'active'
+            WHERE academy_access_status IS NULL
+               OR academy_access_status = ''
+        `);
 
         console.log(`Users table verified/created in database "${databaseName}"`);
 

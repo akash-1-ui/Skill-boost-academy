@@ -4,6 +4,16 @@ const ACCESS_SESSION_STORAGE_KEY = 'skillboost-access-owner-session';
 
 let accessSession = readStoredSession();
 let toastTimeoutId = null;
+const monitoringState = {
+    instructor: {
+        members: [],
+        query: ''
+    },
+    student: {
+        members: [],
+        query: ''
+    }
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     bindAccessPortalEvents();
@@ -60,6 +70,9 @@ function bindAccessPortalEvents() {
     if (refreshBtn) refreshBtn.addEventListener('click', handleRefreshDashboard);
     if (logoutBtn) logoutBtn.addEventListener('click', logoutAccessOwner);
     if (confirmTerminateBtn) confirmTerminateBtn.addEventListener('click', handleTerminateAccessOwner);
+    document.querySelectorAll('[data-monitoring-search]').forEach((input) => {
+        input.addEventListener('input', handleMonitoringSearchInput);
+    });
     document.querySelectorAll('[data-close-terminate]').forEach((button) => {
         button.addEventListener('click', () => closeModal(document.getElementById('terminateAccountModal')));
     });
@@ -74,6 +87,12 @@ function bindAccessPortalEvents() {
         const scrollTargetButton = event.target.closest('[data-scroll-target]');
         if (scrollTargetButton) {
             scrollToDashboardSection(scrollTargetButton.getAttribute('data-scroll-target'));
+            return;
+        }
+
+        const memberActionButton = event.target.closest('[data-member-action]');
+        if (memberActionButton) {
+            handleMemberAccessToggle(memberActionButton);
             return;
         }
 
@@ -476,7 +495,7 @@ function renderDashboard(payload) {
 
     // Invite link - combined into single link
     const academyAccessCode = academy.access_code || '';
-    const joinLink = academyAccessCode ? `${window.location.origin}/HTML/index.html?code=${encodeURIComponent(academyAccessCode)}` : '-';
+    const joinLink = buildAcademyJoinLink(academyAccessCode);
     document.getElementById('academyJoinLink').value = joinLink;
 
     renderWarnings({
@@ -484,6 +503,7 @@ function renderDashboard(payload) {
         usage,
         statistics
     });
+    renderMonitoring(payload.monitoring || {});
     console.log('[DEBUG] About to call renderPlans with', payload.plans?.length, 'plans and currentPlanId:', currentPlan.id);
     renderPlans(payload.plans || [], currentPlan.id);
     renderPayments(payload.payments || []);
@@ -493,6 +513,17 @@ function renderDashboard(payload) {
         sessionBadge.hidden = false;
     }
     clearDuplicateUsageNotice(warnings);
+}
+
+function buildAcademyJoinLink(accessCode) {
+    const normalizedCode = String(accessCode || '').trim();
+    if (!normalizedCode) {
+        return '-';
+    }
+
+    const joinUrl = new URL('index.html', window.location.href);
+    joinUrl.searchParams.set('code', normalizedCode);
+    return joinUrl.toString();
 }
 
 function renderWarningsLegacy(warnings) {
@@ -664,15 +695,39 @@ function renderPlans(plans, currentPlanId) {
         return;
     }
 
-    // Display all plans
-    const displayPlans = plans;
+    const planDisplayPriority = {
+        advanced: 1,
+        pro: 2,
+        basic: 3
+    };
+    const displayPlans = [...plans].sort((left, right) => {
+        const leftKey = String(left?.name || '').trim().toLowerCase();
+        const rightKey = String(right?.name || '').trim().toLowerCase();
+        const leftPriority = planDisplayPriority[leftKey] || 99;
+        const rightPriority = planDisplayPriority[rightKey] || 99;
+
+        if (leftPriority !== rightPriority) {
+            return leftPriority - rightPriority;
+        }
+
+        return Number(left?.id || 0) - Number(right?.id || 0);
+    });
 
     const html = displayPlans.map((plan) => {
         const isCurrent = Number(plan.id) === Number(currentPlanId);
         const cardClass = `plan-option${isCurrent ? ' current' : ''}`;
         const isFree = Number(plan.price) === 0;
-        const actionLabel = isCurrent ? 'Current Plan' : (isFree ? `Activate ${escapeHtml(plan.name)}` : `Upgrade to ${escapeHtml(plan.name)}`);
-        const buttonClass = isCurrent ? 'ghost-btn' : (isFree ? 'primary-btn' : 'upgrade-btn');
+        const activationMode = String(plan.activation_mode || (isFree ? 'free' : 'purchase')).trim().toLowerCase();
+        const isReactivation = activationMode === 'reactivate';
+        const actionLabel = isCurrent
+            ? 'Current Plan'
+            : (isFree || isReactivation)
+                ? `Switch to ${escapeHtml(plan.name)}`
+                : `Upgrade to ${escapeHtml(plan.name)}`;
+        const buttonClass = isCurrent ? 'ghost-btn' : ((isFree || isReactivation) ? 'primary-btn' : 'upgrade-btn');
+        const noRepayNote = isReactivation
+            ? '<span>Previously purchased for this academy. No extra payment required.</span>'
+            : '';
 
         return `
             <article class="${cardClass}">
@@ -685,12 +740,14 @@ function renderPlans(plans, currentPlanId) {
                     <span>${Number(plan.max_instructors || 0)} instructor seats</span>
                     <span>${Number(plan.max_students || 0)} student seats</span>
                     <span>${escapeHtml(plan.description || 'Plan details available after selection.')}</span>
+                    ${noRepayNote}
                 </div>
                 <button
                     type="button"
                     class="${buttonClass}"
                     data-plan-id="${Number(plan.id)}"
                     data-plan-price="${Number(plan.price)}"
+                    data-plan-activation-mode="${escapeHtml(activationMode)}"
                     data-plan-name="${escapeHtml(plan.name || '')}"
                     data-plan-description="${escapeHtml(plan.description || '')}"
                     data-plan-instructors="${Number(plan.max_instructors || 0)}"
@@ -708,13 +765,16 @@ function renderPlans(plans, currentPlanId) {
 
 function renderPayments(payments) {
     const tbody = document.getElementById('paymentsTableBody');
+    const visiblePayments = Array.isArray(payments)
+        ? payments.filter((payment) => Number(payment?.amount || 0) > 0)
+        : [];
 
-    if (!payments.length) {
+    if (!visiblePayments.length) {
         tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">No payment activity yet.</td></tr>';
         return;
     }
 
-    tbody.innerHTML = payments.map((payment) => `
+    tbody.innerHTML = visiblePayments.map((payment) => `
         <tr>
             <td>${escapeHtml(payment.plan_name || '-')}</td>
             <td>${escapeHtml(formatCurrency(payment.amount, payment.currency))}</td>
@@ -723,6 +783,172 @@ function renderPayments(payments) {
             <td>${escapeHtml(formatDateTime(payment.created_at))}</td>
         </tr>
     `).join('');
+}
+
+function renderMonitoring(monitoring) {
+    monitoringState.instructor.members = Array.isArray(monitoring?.instructors) ? monitoring.instructors : [];
+    monitoringState.student.members = Array.isArray(monitoring?.students) ? monitoring.students : [];
+
+    renderMonitoringTable('instructor');
+    renderMonitoringTable('student');
+}
+
+function handleMonitoringSearchInput(event) {
+    const input = event.target;
+    const role = String(input?.dataset?.monitoringSearch || '').trim().toLowerCase();
+
+    if (role !== 'instructor' && role !== 'student') {
+        return;
+    }
+
+    monitoringState[role].query = String(input.value || '').trim().toLowerCase();
+    renderMonitoringTable(role);
+}
+
+function getFilteredMonitoringMembers(role) {
+    const normalizedRole = role === 'instructor' ? 'instructor' : 'student';
+    const members = Array.isArray(monitoringState[normalizedRole]?.members) ? monitoringState[normalizedRole].members : [];
+    const query = String(monitoringState[normalizedRole]?.query || '').trim().toLowerCase();
+
+    if (!query) {
+        return members;
+    }
+
+    return members.filter((member) => {
+        const name = String(member?.name || '').toLowerCase();
+        const email = String(member?.email || '').toLowerCase();
+        return name.includes(query) || email.includes(query);
+    });
+}
+
+function renderMonitoringTable(role) {
+    const normalizedRole = role === 'instructor' ? 'instructor' : 'student';
+    const tableBodyId = normalizedRole === 'instructor'
+        ? 'monitoringInstructorsTableBody'
+        : 'monitoringStudentsTableBody';
+    const tbody = document.getElementById(tableBodyId);
+    if (!tbody) {
+        return;
+    }
+
+    const roleLabel = normalizedRole === 'instructor' ? 'instructor' : 'student';
+    const members = getFilteredMonitoringMembers(normalizedRole);
+    const hasSearchQuery = Boolean(String(monitoringState[normalizedRole]?.query || '').trim());
+
+    if (!members.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="empty-cell">${
+                    hasSearchQuery
+                        ? `No ${escapeHtml(roleLabel)} accounts match this search.`
+                        : `No ${escapeHtml(roleLabel)} accounts have joined with this academy access code yet.`
+                }</td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = members.map((member) => {
+        const currentStatus = String(member.access_status || 'active').trim().toLowerCase() === 'restricted'
+            ? 'restricted'
+            : 'active';
+        const actionLabel = currentStatus === 'restricted' ? 'Allow Access' : 'Restrict Access';
+        const actionTone = currentStatus === 'restricted' ? 'allow' : 'restrict';
+        const nextStatus = currentStatus === 'restricted' ? 'active' : 'restricted';
+
+        return `
+            <tr>
+                <td>
+                    <div class="monitoring-user">
+                        <strong>${escapeHtml(member.name || '-')}</strong>
+                        <span>${escapeHtml(member.email || '-')}</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="status-pill ${currentStatus === 'restricted' ? 'failed' : 'success'}">
+                        ${escapeHtml(currentStatus === 'restricted' ? 'Restricted' : 'Active')}
+                    </span>
+                </td>
+                <td>${escapeHtml(formatMonitoringDate(member.joined_at, '-'))}</td>
+                <td>${escapeHtml(formatMonitoringDate(member.last_login_at, 'Not logged in yet'))}</td>
+                <td>
+                    <button
+                        type="button"
+                        class="monitoring-action-btn ${actionTone}"
+                        data-member-action="toggle-access"
+                        data-member-id="${Number(member.id)}"
+                        data-member-role="${escapeHtml(normalizedRole)}"
+                        data-member-next-status="${escapeHtml(nextStatus)}"
+                        data-member-name="${escapeHtml(member.name || roleLabel)}">
+                        ${escapeHtml(actionLabel)}
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function handleMemberAccessToggle(button) {
+    if (!accessSession?.token) {
+        showToast('Your owner session has expired. Please login again.', 'warning');
+        logoutAccessOwner();
+        return;
+    }
+
+    const userId = Number(button.getAttribute('data-member-id'));
+    const role = String(button.getAttribute('data-member-role') || '').trim().toLowerCase();
+    const nextStatus = String(button.getAttribute('data-member-next-status') || '').trim().toLowerCase();
+    const memberName = String(button.getAttribute('data-member-name') || 'This user').trim();
+
+    if (!Number.isInteger(userId) || userId <= 0 || (role !== 'student' && role !== 'instructor')) {
+        showToast('Unable to update this member right now.', 'error');
+        return;
+    }
+
+    const idleLabel = button.textContent.trim() || (nextStatus === 'restricted' ? 'Restrict Access' : 'Allow Access');
+    const busyLabel = nextStatus === 'restricted' ? 'Restricting...' : 'Allowing...';
+
+    setButtonBusy(button, true, idleLabel, busyLabel);
+
+    try {
+        const response = await updateMemberAccessStatus(userId, role, nextStatus);
+
+        const successMessage = response.message || `${memberName} access updated successfully.`;
+        setDashboardNotice(successMessage, 'success');
+        showToast(successMessage, 'success');
+        await loadDashboard(false);
+    } catch (error) {
+        const failureMessage = error.message || `Unable to update ${memberName} right now.`;
+        setDashboardNotice(failureMessage, 'error');
+        showToast(failureMessage, 'error');
+    } finally {
+        setButtonBusy(button, false, idleLabel);
+    }
+}
+
+async function updateMemberAccessStatus(userId, role, nextStatus) {
+    const payload = {
+        role,
+        access_status: nextStatus
+    };
+
+    try {
+        return await requestAccess(`/members/${userId}/access-status`, {
+            method: 'PATCH',
+            token: accessSession.token,
+            body: payload
+        });
+    } catch (error) {
+        if (error.status) {
+            throw error;
+        }
+
+        return requestAccess(`/members/${userId}/access-status`, {
+            method: 'POST',
+            token: accessSession.token,
+            body: payload
+        });
+    }
 }
 
 function renderActivityLegacy(logs) {
@@ -754,13 +980,21 @@ async function upgradePlan(planId, button) {
     }
 
     const planPrice = Number(button.getAttribute('data-plan-price'));
+    const activationMode = String(
+        button.getAttribute('data-plan-activation-mode') || (planPrice === 0 ? 'free' : 'purchase')
+    ).trim().toLowerCase();
     const originalLabel = button.textContent;
-    
-    // If free plan, activate directly
-    if (planPrice === 0) {
+
+    // Free plans and previously purchased paid plans can be activated directly.
+    if (planPrice === 0 || activationMode === 'reactivate') {
         button.disabled = true;
-        button.textContent = 'Activating...';
-        setDashboardNotice('Activating your free plan...', 'info');
+        button.textContent = activationMode === 'reactivate' ? 'Switching...' : 'Activating...';
+        setDashboardNotice(
+            activationMode === 'reactivate'
+                ? 'Switching to your previously purchased plan...'
+                : 'Activating your free plan...',
+            'info'
+        );
 
         try {
             const response = await requestAccess('/subscription', {
@@ -774,8 +1008,13 @@ async function upgradePlan(planId, button) {
                 persistSession(accessSession);
             }
 
-            setDashboardNotice(response.message || 'Free plan activated successfully.', 'success');
-            showToast(response.message || 'Free plan activated successfully.', 'success');
+            const successMessage = response.message || (
+                activationMode === 'reactivate'
+                    ? 'Plan activated successfully using your previous payment.'
+                    : 'Free plan activated successfully.'
+            );
+            setDashboardNotice(successMessage, 'success');
+            showToast(successMessage, 'success');
             await loadDashboard(false);
         } catch (error) {
             setDashboardNotice(error.message || 'Unable to activate the plan.', 'error');
@@ -896,6 +1135,20 @@ function clearDashboard() {
     document.getElementById('planLimitsValue').textContent = 'Choose a plan to enable seats';
     document.getElementById('academyJoinLink').value = '-';
     document.getElementById('paymentsTableBody').innerHTML = '<tr><td colspan="5" class="empty-cell">No payment activity yet.</td></tr>';
+    document.getElementById('monitoringInstructorsTableBody').innerHTML = '<tr><td colspan="5" class="empty-cell">No instructor accounts yet.</td></tr>';
+    document.getElementById('monitoringStudentsTableBody').innerHTML = '<tr><td colspan="5" class="empty-cell">No student accounts yet.</td></tr>';
+    const monitoringInstructorSearch = document.getElementById('monitoringInstructorSearch');
+    const monitoringStudentSearch = document.getElementById('monitoringStudentSearch');
+    if (monitoringInstructorSearch) {
+        monitoringInstructorSearch.value = '';
+    }
+    if (monitoringStudentSearch) {
+        monitoringStudentSearch.value = '';
+    }
+    monitoringState.instructor.members = [];
+    monitoringState.instructor.query = '';
+    monitoringState.student.members = [];
+    monitoringState.student.query = '';
     document.getElementById('plansGrid').innerHTML = '';
     document.getElementById('warningList').innerHTML = '';
     setDashboardNotice('', 'info', true);
@@ -1071,6 +1324,15 @@ function formatDateTime(value) {
         dateStyle: 'medium',
         timeStyle: 'short'
     });
+}
+
+function formatMonitoringDate(value, fallback = '-') {
+    if (!value) {
+        return fallback;
+    }
+
+    const formatted = formatDateTime(value);
+    return formatted === '-' ? fallback : formatted;
 }
 
 function formatUsageValue(metric) {

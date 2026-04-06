@@ -231,8 +231,7 @@
 
     if (studentLogoutLink) {
       studentLogoutLink.addEventListener('click', () => {
-        localStorage.removeItem('studentEmail');
-        localStorage.removeItem('studentId');
+        clearStudentSession();
       });
     }
 
@@ -269,7 +268,93 @@
     const API_BASE = 'http://localhost:3000';
     const STUDENT_NOTIFICATIONS_POLL_MS = 12000;
     const STUDENT_NOTIFICATIONS_SEEN_PREFIX = 'studentNotificationsLastSeen_';
+    const STUDENT_ACCESS_POLL_MS = 10000;
     let studentNotificationPollHandle = null;
+    let studentAccessPollHandle = null;
+
+    function clearStudentSession() {
+      const currentStudentEmail = localStorage.getItem('studentEmail') || '';
+      if (currentStudentEmail) {
+        localStorage.removeItem(`studentName_${currentStudentEmail}`);
+        localStorage.removeItem(`studentBranch_${currentStudentEmail}`);
+        localStorage.removeItem(`studentPhoto_${currentStudentEmail}`);
+        localStorage.removeItem(`enrolledCourses_${currentStudentEmail}`);
+        localStorage.removeItem(`timeSpent_${currentStudentEmail}`);
+        localStorage.removeItem(`viewedVideos_${currentStudentEmail}`);
+      }
+      localStorage.removeItem('studentEmail');
+      localStorage.removeItem('studentId');
+      localStorage.removeItem('academyId');
+      localStorage.removeItem('user');
+    }
+
+    function buildStudentLoginRedirect(notice) {
+      const params = new URLSearchParams({
+        role: 'student',
+        notice: notice || 'restricted_by_admin'
+      });
+      const currentStudentEmail = localStorage.getItem('studentEmail') || '';
+      if (currentStudentEmail) {
+        params.set('email', currentStudentEmail);
+      }
+      return `login.html?${params.toString()}`;
+    }
+
+    function handleStudentAccessRevoked(message, notice = 'restricted_by_admin') {
+      const formattedMessage = message || 'Access restricted by academy admin. You have been logged out. Contact the academy admin to restore access.';
+      clearStudentSession();
+      alert(`Access Update\n\n${formattedMessage}`);
+      window.location.href = buildStudentLoginRedirect(notice);
+    }
+
+    async function checkStudentSessionAccess() {
+      const currentStudentId = localStorage.getItem('studentId') || '';
+      const currentStudentEmail = localStorage.getItem('studentEmail') || '';
+      if (!currentStudentId && !currentStudentEmail) {
+        window.location.href = 'login.html?role=student';
+        return false;
+      }
+
+      try {
+        const params = new URLSearchParams({
+          role: 'student'
+        });
+        if (currentStudentId) {
+          params.set('userId', currentStudentId);
+        }
+        if (currentStudentEmail) {
+          params.set('email', currentStudentEmail);
+        }
+
+        const response = await fetch(`${API_BASE}/api/access/session-status?${params.toString()}`, {
+          cache: 'no-store'
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(payload.message || 'Unable to verify student access.');
+        }
+
+        if (payload.allowed === false) {
+          handleStudentAccessRevoked(payload.message, payload.reason || 'restricted_by_admin');
+          return false;
+        }
+
+        return true;
+      } catch (error) {
+        console.error('Student session check failed:', error);
+        return true;
+      }
+    }
+
+    function startStudentAccessPolling() {
+      if (studentAccessPollHandle) {
+        clearInterval(studentAccessPollHandle);
+      }
+      studentAccessPollHandle = setInterval(() => {
+        checkStudentSessionAccess();
+      }, STUDENT_ACCESS_POLL_MS);
+    }
 
     function getTimestampMs(value) {
       const timestamp = new Date(value).getTime();
@@ -656,10 +741,16 @@
     });
 
     // Call fetchCourses on page load
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+      const canUseStudentDashboard = await checkStudentSessionAccess();
+      if (!canUseStudentDashboard) {
+        return;
+      }
+
       fetchCourses();
       updateStudentStats();
       startStudentNotificationPolling();
+      startStudentAccessPolling();
     });
 
     const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
@@ -783,6 +874,9 @@
     window.addEventListener('beforeunload', () => {
       if (studentNotificationPollHandle) {
         clearInterval(studentNotificationPollHandle);
+      }
+      if (studentAccessPollHandle) {
+        clearInterval(studentAccessPollHandle);
       }
     });
   </script>

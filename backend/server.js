@@ -6,6 +6,7 @@ const db = require('./db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
@@ -34,11 +35,12 @@ try {
 const app = express();
 const port = process.env.PORT || 3000;
 const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
-const RESET_OTP_EXPIRY_MINUTES = Number(process.env.RESET_OTP_EXPIRY_MINUTES || 10);
-const RESET_OTP_RESEND_SECONDS = Number(process.env.RESET_OTP_RESEND_SECONDS || 60);
+const RESET_OTP_EXPIRY_MINUTES = Number(process.env.RESET_OTP_EXPIRY_MINUTES || 2);
+const RESET_OTP_RESEND_SECONDS = Number(process.env.RESET_OTP_RESEND_SECONDS || 120);
 const RESET_OTP_MAX_ATTEMPTS = Number(process.env.RESET_OTP_MAX_ATTEMPTS || 5);
 const LOCAL_VIDEO_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const ACCESS_OWNER_JWT_SECRET = process.env.ACCESS_OWNER_JWT_SECRET || 'skillboostacademy-access-owner-secret';
+const PASSWORD_RESET_JWT_SECRET = process.env.PASSWORD_RESET_JWT_SECRET || 'skillboostacademy-password-reset-secret';
 const RAZORPAY_API_BASE = 'https://api.razorpay.com/v1';
 
 process.on('uncaughtException', (err) => {
@@ -100,7 +102,7 @@ app.use(cors({
         callback(null, true);
     },
     credentials: false,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin'],
     exposedHeaders: ['Content-Type'],
     maxAge: 86400
@@ -181,10 +183,6 @@ function normalizeGroupMessageCategory(value, messageText = '') {
         : 'instructor_message';
 }
 
-function sanitizePhoneNumber(value) {
-    return String(value || '').replace(/\D/g, '');
-}
-
 function normalizeRole(role) {
     if (!role) {
         return null;
@@ -197,13 +195,23 @@ function normalizeRole(role) {
     return normalized;
 }
 
-function maskPhoneNumber(value) {
-    const digits = sanitizePhoneNumber(value);
-    if (digits.length < 4) {
-        return '****';
+function maskEmail(value) {
+    const normalizedEmail = normalizeCustomerEmail(value);
+    const [localPart, domainPart] = normalizedEmail.split('@');
+    if (!localPart || !domainPart) {
+        return 'your email';
     }
-    const visible = digits.slice(-4);
-    return `******${visible}`;
+
+    const [domainName, ...domainSuffixParts] = domainPart.split('.');
+    const domainSuffix = domainSuffixParts.length > 0 ? `.${domainSuffixParts.join('.')}` : '';
+    const maskedLocal = localPart.length <= 2
+        ? `${localPart.charAt(0)}***`
+        : `${localPart.slice(0, 2)}***${localPart.slice(-1)}`;
+    const maskedDomain = domainName.length <= 2
+        ? `${domainName.charAt(0)}***`
+        : `${domainName.slice(0, 2)}***${domainName.slice(-1)}`;
+
+    return `${maskedLocal}@${maskedDomain}${domainSuffix}`;
 }
 
 function formatWatchHoursFromSeconds(seconds) {
@@ -211,65 +219,124 @@ function formatWatchHoursFromSeconds(seconds) {
     return Number((value / 3600).toFixed(2));
 }
 
-async function findUserByPhoneAndRole(phone, role) {
-    const cleanedPhone = sanitizePhoneNumber(phone);
+async function findUserByEmailAndRole(email, role, { includePassword = false } = {}) {
+    const normalizedEmail = normalizeCustomerEmail(email);
     const cleanedRole = normalizeRole(role);
 
-    if (!cleanedPhone || !cleanedRole) {
+    if (!normalizedEmail || !cleanedRole) {
         return null;
     }
 
     const [rows] = await db.query(
-        `SELECT id, username, email, phone, role
+        `SELECT id, username, email, phone, role${includePassword ? ', password' : ''}
          FROM users
-         WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = ?
+         WHERE email = ?
            AND role = ?
          ORDER BY id DESC
          LIMIT 1`,
-        [cleanedPhone, cleanedRole]
+        [normalizedEmail, cleanedRole]
     );
 
     return rows[0] || null;
 }
 
-async function sendResetOtpSms(phone, otp) {
-    const provider = String(process.env.SMS_PROVIDER || 'mock').trim().toLowerCase();
-    const messageText = `Skill Boost Nexus reset code: ${otp}. Valid for ${RESET_OTP_EXPIRY_MINUTES} minutes.`;
+let resetOtpMailTransporter = null;
 
-    if (provider === 'twilio') {
-        const sid = process.env.TWILIO_ACCOUNT_SID;
-        const token = process.env.TWILIO_AUTH_TOKEN;
-        const from = process.env.TWILIO_FROM_NUMBER;
-
-        if (!sid || !token || !from) {
-            throw new Error('Twilio credentials are not configured');
-        }
-
-        const params = new URLSearchParams();
-        params.set('To', phone);
-        params.set('From', from);
-        params.set('Body', messageText);
-
-        const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Basic ${Buffer.from(`${sid}:${token}`).toString('base64')}`,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: params.toString()
-        });
-
-        if (!response.ok) {
-            const providerError = await response.text();
-            throw new Error(`SMS provider error: ${providerError}`);
-        }
-
-        return { provider: 'twilio' };
+function getResetOtpMailTransporter() {
+    if (resetOtpMailTransporter) {
+        return resetOtpMailTransporter;
     }
 
-    // Fallback for local development when no SMS provider is configured.
-    console.log(`[SMS MOCK] Reset OTP for ${phone}: ${otp}`);
-    return { provider: 'mock', otp };
+    const service = String(process.env.EMAIL_SERVICE || process.env.SMTP_SERVICE || '').trim();
+    const host = String(process.env.SMTP_HOST || '').trim();
+    const port = Number(process.env.SMTP_PORT || 0);
+    const user = String(process.env.EMAIL_USER || process.env.SMTP_USER || '').trim();
+    const pass = String(process.env.EMAIL_PASS || process.env.SMTP_PASS || '').trim();
+
+    if (!user || !pass || (!service && !host)) {
+        return null;
+    }
+
+    const transportConfig = service
+        ? {
+            service,
+            auth: { user, pass }
+        }
+        : {
+            host,
+            port: port || 587,
+            secure: String(process.env.SMTP_SECURE || '').trim()
+                ? String(process.env.SMTP_SECURE).trim().toLowerCase() === 'true'
+                : (port || 587) === 465,
+            auth: { user, pass }
+        };
+
+    resetOtpMailTransporter = nodemailer.createTransport(transportConfig);
+    return resetOtpMailTransporter;
+}
+
+async function sendResetOtpEmail(email, otp, role, username) {
+    const transporter = getResetOtpMailTransporter();
+    const roleLabel = role === 'student' ? 'Student' : 'Instructor';
+    const greetingName = String(username || roleLabel).trim();
+    const authenticatedEmail = String(process.env.EMAIL_USER || process.env.SMTP_USER || '').trim();
+    const configuredFromAddress = String(process.env.EMAIL_FROM || process.env.SMTP_FROM || '').trim();
+    const serviceName = String(process.env.EMAIL_SERVICE || process.env.SMTP_SERVICE || '').trim().toLowerCase();
+    const fromAddress = serviceName === 'gmail'
+        ? authenticatedEmail
+        : (configuredFromAddress || authenticatedEmail);
+    const subject = 'Skill Boost Nexus password reset code';
+    const text = [
+        `Hello ${greetingName},`,
+        '',
+        `Your Skill Boost Nexus password reset code is ${otp}.`,
+        `This code is valid for ${RESET_OTP_EXPIRY_MINUTES} minutes.`,
+        '',
+        'If you did not request this code, you can ignore this email.'
+    ].join('\n');
+
+    if (!transporter || !fromAddress) {
+        const configError = new Error('Email delivery is not configured');
+        configError.code = 'EMAIL_NOT_CONFIGURED';
+        throw configError;
+    }
+
+    await transporter.sendMail({
+        from: fromAddress,
+        replyTo: configuredFromAddress && configuredFromAddress !== fromAddress ? configuredFromAddress : undefined,
+        to: email,
+        subject,
+        text,
+        html: `
+            <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6;">
+                <p>Hello ${greetingName},</p>
+                <p>Your <strong>Skill Boost Nexus</strong> password reset code is:</p>
+                <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px; margin: 18px 0;">${otp}</p>
+                <p>This code is valid for <strong>${RESET_OTP_EXPIRY_MINUTES} minutes</strong>.</p>
+                <p>If you did not request this code, you can ignore this email.</p>
+            </div>
+        `
+    });
+
+    return { provider: 'email' };
+}
+
+function signPasswordResetToken(user) {
+    const passwordSignature = crypto
+        .createHash('sha256')
+        .update(String(user.password || ''))
+        .digest('hex');
+
+    return jwt.sign(
+        {
+            user_id: Number(user.id),
+            role: normalizeRole(user.role),
+            purpose: 'password_reset',
+            password_signature: passwordSignature
+        },
+        PASSWORD_RESET_JWT_SECRET,
+        { expiresIn: '10m' }
+    );
 }
 
 function normalizeCourse(course) {
@@ -2185,17 +2252,6 @@ app.post('/api/register', async (req, res) => {
             return res.status(401).json({ error: 'Invalid access code' });
         }
 
-        const capacity = await getAcademyRoleCapacity(academy.id, 'student');
-        if (capacity.limit > 0 && capacity.current >= capacity.limit) {
-            const message = buildAccessLimitMessage('student');
-            await logAccessAttempt(academy.id, 'student', 'failed', message, email);
-            return res.status(403).json({
-                error: message,
-                current_count: capacity.current,
-                max_count: capacity.limit
-            });
-        }
-
         const [existing] = await db.query(
             `SELECT id, role, academy_id
              FROM users
@@ -2222,17 +2278,35 @@ app.post('/api/register', async (req, res) => {
             return res.status(409).json({ error: 'Email already registered' });
         }
 
+        const capacity = await getAcademyRoleCapacity(academy.id, 'student');
+        const registrationStatus = capacity.limit > 0 && capacity.current >= capacity.limit
+            ? 'restricted'
+            : 'active';
         const hashedPassword = await bcrypt.hash(password, 10);
         const [result] = await db.query(
-            `INSERT INTO users (username, email, phone, password, role, branch, academy_id, created_at)
-             VALUES (?, ?, ?, ?, 'student', ?, ?, NOW())`,
-            [name, email, phone || null, hashedPassword, course || null, academy.id]
+            `INSERT INTO users (
+                username,
+                email,
+                phone,
+                password,
+                role,
+                branch,
+                academy_id,
+                academy_access_status,
+                academy_access_restricted_at,
+                created_at
+             )
+             VALUES (?, ?, ?, ?, 'student', ?, ?, ?, CASE WHEN ? = 'restricted' THEN NOW() ELSE NULL END, NOW())`,
+            [name, email, phone || null, hashedPassword, course || null, academy.id, registrationStatus, registrationStatus]
         );
 
         return res.status(201).json({
-            message: 'Registration successful',
+            message: registrationStatus === 'restricted'
+                ? 'Student account created, but access is currently restricted by the academy admin because the active seat limit is full.'
+                : 'Registration successful',
             userId: result.insertId,
-            academy_id: academy.id
+            academy_id: academy.id,
+            access_status: registrationStatus
         });
     } catch (error) {
         console.error('Student registration error:', error);
@@ -2256,17 +2330,6 @@ app.post('/api/register/instructor', async (req, res) => {
         const academy = await findAcademyByAccessCode(accessCode);
         if (!academy) {
             return res.status(401).json({ error: 'Invalid access code' });
-        }
-
-        const capacity = await getAcademyRoleCapacity(academy.id, 'instructor');
-        if (capacity.limit > 0 && capacity.current >= capacity.limit) {
-            const message = buildAccessLimitMessage('instructor');
-            await logAccessAttempt(academy.id, 'instructor', 'failed', message, email);
-            return res.status(403).json({
-                error: message,
-                current_count: capacity.current,
-                max_count: capacity.limit
-            });
         }
 
         const [existing] = await db.query(
@@ -2295,17 +2358,35 @@ app.post('/api/register/instructor', async (req, res) => {
             return res.status(409).json({ error: 'Email already registered' });
         }
 
+        const capacity = await getAcademyRoleCapacity(academy.id, 'instructor');
+        const registrationStatus = capacity.limit > 0 && capacity.current >= capacity.limit
+            ? 'restricted'
+            : 'active';
         const hashedPassword = await bcrypt.hash(password, 10);
         const [result] = await db.query(
-            `INSERT INTO users (username, email, phone, password, role, expertise, academy_id, created_at)
-             VALUES (?, ?, ?, ?, 'instructor', ?, ?, NOW())`,
-            [name, email, phone || null, hashedPassword, expertise, academy.id]
+            `INSERT INTO users (
+                username,
+                email,
+                phone,
+                password,
+                role,
+                expertise,
+                academy_id,
+                academy_access_status,
+                academy_access_restricted_at,
+                created_at
+             )
+             VALUES (?, ?, ?, ?, 'instructor', ?, ?, ?, CASE WHEN ? = 'restricted' THEN NOW() ELSE NULL END, NOW())`,
+            [name, email, phone || null, hashedPassword, expertise, academy.id, registrationStatus, registrationStatus]
         );
 
         return res.status(201).json({
-            message: 'Instructor registration successful',
+            message: registrationStatus === 'restricted'
+                ? 'Instructor account created, but access is currently restricted by the academy admin because the active seat limit is full.'
+                : 'Instructor registration successful',
             userId: result.insertId,
-            academy_id: academy.id
+            academy_id: academy.id,
+            access_status: registrationStatus
         });
     } catch (error) {
         console.error('Instructor registration error:', error);
@@ -2329,7 +2410,7 @@ app.post('/api/login/student', async (req, res) => {
         }
 
         const [users] = await db.query(
-            `SELECT id, username AS name, email, password, branch, profile_photo
+            `SELECT id, username AS name, email, password, branch, profile_photo, academy_access_status
              FROM users
              WHERE email = ? AND role = 'student' AND academy_id = ?
              LIMIT 1`,
@@ -2345,7 +2426,7 @@ app.post('/api/login/student', async (req, res) => {
             }
         } else {
             const [legacyUsers] = await db.query(
-                `SELECT id, username AS name, email, password, branch, profile_photo, academy_id
+                `SELECT id, username AS name, email, password, branch, profile_photo, academy_id, academy_access_status
                  FROM users
                  WHERE email = ? AND role = 'student'
                  LIMIT 1`,
@@ -2390,6 +2471,14 @@ app.post('/api/login/student', async (req, res) => {
             });
         }
 
+        if (normalizeAcademyAccessStatus(student.academy_access_status) === 'restricted') {
+            const message = buildRestrictedAccessMessage('student');
+            await logAccessAttempt(academy.id, 'student', 'failed', message, email);
+            return res.status(403).json({
+                error: message
+            });
+        }
+
         const studentSeatState = await getAcademyRoleSeatState(academy.id, 'student');
         if (studentSeatState.limit > 0 &&
             studentSeatState.current > studentSeatState.limit &&
@@ -2403,9 +2492,17 @@ app.post('/api/login/student', async (req, res) => {
             });
         }
 
+        await db.query(
+            `UPDATE users
+             SET academy_access_last_login_at = NOW()
+             WHERE id = ?`,
+            [student.id]
+        );
+
         delete student.password;
         student.photo = student.profile_photo || DEFAULT_PROFILE_PHOTO;
         delete student.profile_photo;
+        delete student.academy_access_status;
         student.academy_id = academy.id;
 
         return res.json({
@@ -2434,7 +2531,7 @@ app.post('/api/login/instructor', async (req, res) => {
         }
 
         const [users] = await db.query(
-            `SELECT id, username AS name, email, password, expertise, profile_photo
+            `SELECT id, username AS name, email, password, expertise, profile_photo, academy_access_status
              FROM users
              WHERE email = ? AND role = 'instructor' AND academy_id = ?
              LIMIT 1`,
@@ -2450,7 +2547,7 @@ app.post('/api/login/instructor', async (req, res) => {
             }
         } else {
             const [legacyUsers] = await db.query(
-                `SELECT id, username AS name, email, password, expertise, profile_photo, academy_id
+                `SELECT id, username AS name, email, password, expertise, profile_photo, academy_id, academy_access_status
                  FROM users
                  WHERE email = ? AND role = 'instructor'
                  LIMIT 1`,
@@ -2495,6 +2592,14 @@ app.post('/api/login/instructor', async (req, res) => {
             });
         }
 
+        if (normalizeAcademyAccessStatus(instructor.academy_access_status) === 'restricted') {
+            const message = buildRestrictedAccessMessage('instructor');
+            await logAccessAttempt(academy.id, 'instructor', 'failed', message, email);
+            return res.status(403).json({
+                error: message
+            });
+        }
+
         const instructorSeatState = await getAcademyRoleSeatState(academy.id, 'instructor');
         if (instructorSeatState.limit > 0 &&
             instructorSeatState.current > instructorSeatState.limit &&
@@ -2508,9 +2613,17 @@ app.post('/api/login/instructor', async (req, res) => {
             });
         }
 
+        await db.query(
+            `UPDATE users
+             SET academy_access_last_login_at = NOW()
+             WHERE id = ?`,
+            [instructor.id]
+        );
+
         delete instructor.password;
         instructor.photo = instructor.profile_photo || DEFAULT_PROFILE_PHOTO;
         delete instructor.profile_photo;
+        delete instructor.academy_access_status;
         instructor.academy_id = academy.id;
 
         return res.json({
@@ -2833,17 +2946,19 @@ app.put(['/notifications/read/:notificationId', '/api/notifications/read/:notifi
 
 app.post('/api/forgot-password/send-otp', async (req, res) => {
     try {
-        const { phone, role } = req.body;
-        const cleanedPhone = sanitizePhoneNumber(phone);
+        const { email, role } = req.body;
+        const normalizedEmail = normalizeCustomerEmail(email);
         const cleanedRole = normalizeRole(role);
+        const expirySeconds = RESET_OTP_EXPIRY_MINUTES * 60;
+        const resendAfterSeconds = Math.max(RESET_OTP_RESEND_SECONDS, expirySeconds);
 
-        if (!cleanedPhone || !cleanedRole) {
-            return res.status(400).json({ error: 'Valid phone number and role are required' });
+        if (!normalizedEmail || !cleanedRole) {
+            return res.status(400).json({ error: 'Valid email address and role are required' });
         }
 
-        const user = await findUserByPhoneAndRole(cleanedPhone, cleanedRole);
+        const user = await findUserByEmailAndRole(normalizedEmail, cleanedRole);
         if (!user) {
-            return res.status(404).json({ error: 'No account found for this mobile number and role' });
+            return res.status(404).json({ error: 'No account found for this email and role' });
         }
 
         const [recentRows] = await db.query(
@@ -2854,16 +2969,16 @@ app.post('/api/forgot-password/send-otp', async (req, res) => {
         if (recentRows.length > 0) {
             const createdAt = new Date(recentRows[0].created_at).getTime();
             const elapsedSeconds = Math.floor((Date.now() - createdAt) / 1000);
-            if (elapsedSeconds < RESET_OTP_RESEND_SECONDS) {
+            if (elapsedSeconds < resendAfterSeconds) {
                 return res.status(429).json({
-                    error: `Please wait ${RESET_OTP_RESEND_SECONDS - elapsedSeconds} seconds before requesting another code`
+                    error: `Please wait ${resendAfterSeconds - elapsedSeconds} seconds before requesting another code`
                 });
             }
         }
 
-        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        const otp = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
         const otpHash = await bcrypt.hash(otp, 10);
-        const expiresAt = new Date(Date.now() + RESET_OTP_EXPIRY_MINUTES * 60 * 1000);
+        const expiresAt = new Date(Date.now() + expirySeconds * 1000);
 
         await db.query('UPDATE password_reset_otps SET used = 1 WHERE user_id = ? AND used = 0', [user.id]);
         const [insertResult] = await db.query(
@@ -2872,47 +2987,47 @@ app.post('/api/forgot-password/send-otp', async (req, res) => {
             [user.id, otpHash, expiresAt]
         );
 
-        let smsResult;
+        let emailResult;
         try {
-            smsResult = await sendResetOtpSms(user.phone || cleanedPhone, otp);
-        } catch (smsError) {
+            emailResult = await sendResetOtpEmail(user.email || normalizedEmail, otp, cleanedRole, user.username);
+        } catch (emailError) {
             await db.query('UPDATE password_reset_otps SET used = 1 WHERE id = ?', [insertResult.insertId]);
-            throw smsError;
+            throw emailError;
         }
 
+        const maskedEmail = maskEmail(user.email || normalizedEmail);
         const responsePayload = {
-            message: `Verification code sent to mobile ending ${maskPhoneNumber(user.phone || cleanedPhone)}`
+            message: `Verification code sent to ${maskedEmail}`,
+            maskedEmail,
+            expiresInSeconds: expirySeconds,
+            resendAfterSeconds
         };
-
-        if (smsResult.provider === 'mock') {
-            responsePayload.devOtp = smsResult.otp;
-            responsePayload.note = 'SMS provider is in mock mode. Configure Twilio env vars for real SMS delivery.';
-        }
 
         return res.json(responsePayload);
     } catch (error) {
         console.error('Forgot password send OTP error:', error);
+        if (error.code === 'EMAIL_NOT_CONFIGURED') {
+            return res.status(503).json({
+                error: 'Email delivery is not configured on the server yet. Add EMAIL_SERVICE, EMAIL_USER, EMAIL_PASS, and EMAIL_FROM in backend/.env.'
+            });
+        }
         return res.status(500).json({ error: 'Failed to send verification code' });
     }
 });
 
 app.post('/api/forgot-password/verify-otp', async (req, res) => {
     try {
-        const { phone, role, otp, newPassword } = req.body;
-        const cleanedPhone = sanitizePhoneNumber(phone);
+        const { email, role, otp } = req.body;
+        const normalizedEmail = normalizeCustomerEmail(email);
         const cleanedRole = normalizeRole(role);
 
-        if (!cleanedPhone || !cleanedRole || !otp || !newPassword) {
-            return res.status(400).json({ error: 'Phone, role, verification code and new password are required' });
+        if (!normalizedEmail || !cleanedRole || !otp) {
+            return res.status(400).json({ error: 'Email, role, and verification code are required' });
         }
 
-        if (String(newPassword).length < 6) {
-            return res.status(400).json({ error: 'New password must be at least 6 characters' });
-        }
-
-        const user = await findUserByPhoneAndRole(cleanedPhone, cleanedRole);
+        const user = await findUserByEmailAndRole(normalizedEmail, cleanedRole, { includePassword: true });
         if (!user) {
-            return res.status(404).json({ error: 'No account found for this mobile number and role' });
+            return res.status(404).json({ error: 'No account found for this email and role' });
         }
 
         const [otpRows] = await db.query(
@@ -2952,14 +3067,71 @@ app.post('/api/forgot-password/verify-otp', async (req, res) => {
             return res.status(400).json({ error: 'Invalid verification code' });
         }
 
-        const hashedPassword = await bcrypt.hash(String(newPassword), 10);
-
-        await db.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user.id]);
         await db.query('UPDATE password_reset_otps SET used = 1 WHERE id = ?', [latestOtp.id]);
+
+        return res.json({
+            message: 'Verification successful. You can now create a new password.',
+            resetToken: signPasswordResetToken(user)
+        });
+    } catch (error) {
+        console.error('Forgot password verify OTP error:', error);
+        return res.status(500).json({ error: 'Failed to verify the code' });
+    }
+});
+
+app.post('/api/forgot-password/reset-password', async (req, res) => {
+    try {
+        const { resetToken, newPassword } = req.body;
+
+        if (!resetToken || !newPassword) {
+            return res.status(400).json({ error: 'Reset session and new password are required' });
+        }
+
+        if (String(newPassword).length < 6) {
+            return res.status(400).json({ error: 'New password must be at least 6 characters' });
+        }
+
+        let decodedToken;
+        try {
+            decodedToken = jwt.verify(String(resetToken), PASSWORD_RESET_JWT_SECRET);
+        } catch (tokenError) {
+            return res.status(400).json({ error: 'Reset session expired. Please request a new verification code.' });
+        }
+
+        const cleanedRole = normalizeRole(decodedToken.role);
+        const userId = Number(decodedToken.user_id || 0);
+        if (!userId || !cleanedRole || decodedToken.purpose !== 'password_reset') {
+            return res.status(400).json({ error: 'Invalid reset session. Please request a new verification code.' });
+        }
+
+        const [userRows] = await db.query(
+            `SELECT id, role, password
+             FROM users
+             WHERE id = ? AND role = ?
+             LIMIT 1`,
+            [userId, cleanedRole]
+        );
+
+        if (userRows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const user = userRows[0];
+        const currentPasswordSignature = crypto
+            .createHash('sha256')
+            .update(String(user.password || ''))
+            .digest('hex');
+
+        if (currentPasswordSignature !== decodedToken.password_signature) {
+            return res.status(400).json({ error: 'Reset session is no longer valid. Please request a new verification code.' });
+        }
+
+        const hashedPassword = await bcrypt.hash(String(newPassword), 10);
+        await db.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user.id]);
 
         return res.json({ message: 'Password reset successful. Please login with your new password.' });
     } catch (error) {
-        console.error('Forgot password verify OTP error:', error);
+        console.error('Forgot password reset error:', error);
         return res.status(500).json({ error: 'Failed to reset password' });
     }
 });
@@ -3268,7 +3440,9 @@ app.get('/api/instructor-dashboard/:instructorId', async (req, res) => {
         const seatAccess = await getUserSeatAccessState(instructorId, 'instructor');
         if (!seatAccess.allowed) {
             return res.status(403).json({
-                error: buildUseAnotherAccessCodeMessage('instructor')
+                error: seatAccess.restricted
+                    ? buildRestrictedAccessMessage('instructor')
+                    : buildUseAnotherAccessCodeMessage('instructor')
             });
         }
 
@@ -3392,7 +3566,9 @@ app.get('/api/instructor-summary/:instructorId', async (req, res) => {
         const seatAccess = await getUserSeatAccessState(instructorId, 'instructor');
         if (!seatAccess.allowed) {
             return res.status(403).json({
-                error: buildUseAnotherAccessCodeMessage('instructor')
+                error: seatAccess.restricted
+                    ? buildRestrictedAccessMessage('instructor')
+                    : buildUseAnotherAccessCodeMessage('instructor')
             });
         }
 
@@ -3848,6 +4024,15 @@ async function initializeAccessTables() {
         await ensureColumnExists('customers', 'password_hash', 'password_hash VARCHAR(255) NULL AFTER phone');
         await ensureColumnExists('academies', 'status', `status VARCHAR(50) DEFAULT 'active' AFTER access_code`);
         await ensureColumnExists('users', 'academy_id', 'academy_id VARCHAR(36) NULL AFTER profile_photo');
+        await ensureColumnExists('users', 'academy_access_status', `academy_access_status VARCHAR(20) NOT NULL DEFAULT 'active' AFTER academy_id`);
+        await ensureColumnExists('users', 'academy_access_last_login_at', 'academy_access_last_login_at DATETIME NULL AFTER academy_access_status');
+        await ensureColumnExists('users', 'academy_access_restricted_at', 'academy_access_restricted_at DATETIME NULL AFTER academy_access_last_login_at');
+        await db.query(`
+            UPDATE users
+            SET academy_access_status = 'active'
+            WHERE academy_access_status IS NULL
+               OR academy_access_status = ''
+        `);
 
         // Check if plans exist and initialize/update them
         const [existingPlans] = await db.query('SELECT COUNT(*) as count FROM plans');
@@ -3882,14 +4067,24 @@ function generateUUID() {
     });
 }
 
+function buildAccessCodePrefix(academyName) {
+    const firstWord = String(academyName || '')
+        .trim()
+        .split(/\s+/)
+        .find(Boolean) || 'ACADEMY';
+    const sanitized = firstWord.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    return (sanitized || 'ACADEMY').slice(0, 10);
+}
+
 // Helper function to generate access code
-function generateAccessCode() {
+function generateAccessCode(academyName = '') {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 8; i++) {
-        code += chars.charAt(crypto.randomInt(0, chars.length));
+    const prefix = buildAccessCodePrefix(academyName);
+    let suffix = '';
+    for (let i = 0; i < 4; i++) {
+        suffix += chars.charAt(crypto.randomInt(0, chars.length));
     }
-    return code;
+    return `${prefix}-${suffix}`;
 }
 
 function normalizeCustomerEmail(value) {
@@ -4099,9 +4294,9 @@ async function getAccessOwnerContext(customerId, academyId = null, connection = 
     return rows[0] || null;
 }
 
-async function generateUniqueAccessCode(connection = db) {
+async function generateUniqueAccessCode(academyName = '', connection = db) {
     for (let attempt = 0; attempt < 20; attempt += 1) {
-        const candidate = generateAccessCode();
+        const candidate = generateAccessCode(academyName);
         const [rows] = await connection.query(
             'SELECT id FROM academies WHERE access_code = ? LIMIT 1',
             [candidate]
@@ -4145,6 +4340,27 @@ async function insertAcademyPayment(connection, payload) {
     );
 
     return paymentReference;
+}
+
+async function findReusablePlanPayment(connection, payload) {
+    const [rows] = await connection.query(
+        `SELECT id, payment_reference, currency, amount, created_at
+         FROM academy_payments
+         WHERE academy_id = ?
+           AND customer_id = ?
+           AND plan_id = ?
+           AND amount > 0
+           AND status = 'completed'
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1`,
+        [
+            payload.academyId,
+            payload.customerId,
+            payload.planId
+        ]
+    );
+
+    return rows[0] || null;
 }
 
 async function accessOwnerAuth(req, res, next) {
@@ -4244,13 +4460,23 @@ function getAccessRoleLabel(role) {
 function buildAccessLimitMessage(role) {
     const normalizedRole = normalizeRole(role) || 'student';
     const roleLabel = getAccessRoleLabel(normalizedRole);
-    return `${roleLabel} limit exceeded for the current plan. New ${normalizedRole} registrations and logins are blocked for this access code until the owner upgrades the plan.`;
+    return `${roleLabel} limit exceeded for the current plan. New ${normalizedRole} registrations and additional logins are blocked for this access code until the owner upgrades the plan or restricts unused access.`;
 }
 
 function buildUseAnotherAccessCodeMessage(role) {
     const normalizedRole = normalizeRole(role) || 'student';
     const roleLabel = getAccessRoleLabel(normalizedRole);
     return `${roleLabel} access for this academy code is already full. Please use another access code or contact the academy owner.`;
+}
+
+function normalizeAcademyAccessStatus(value) {
+    return String(value || '').trim().toLowerCase() === 'restricted' ? 'restricted' : 'active';
+}
+
+function buildRestrictedAccessMessage(role) {
+    const normalizedRole = normalizeRole(role) || 'student';
+    const roleLabel = getAccessRoleLabel(normalizedRole);
+    return `${roleLabel} access has been restricted by the academy admin. Please contact the academy admin to restore access.`;
 }
 
 async function findAcademyByAccessCode(accessCode, connection = db) {
@@ -4292,7 +4518,13 @@ async function getAcademyRoleCapacity(academyId, role, connection = db) {
     const [rows] = await connection.query(
         `SELECT
             p.${limitColumn} AS seat_limit,
-            (SELECT COUNT(*) FROM users WHERE academy_id = ? AND role = ?) AS current_count
+            (
+                SELECT COUNT(*)
+                FROM users
+                WHERE academy_id = ?
+                  AND role = ?
+                  AND COALESCE(academy_access_status, 'active') <> 'restricted'
+            ) AS current_count
          FROM academies a
          LEFT JOIN plans p ON p.id = a.plan_id
          WHERE a.id = ?
@@ -4327,6 +4559,7 @@ async function getAcademyRoleSeatState(academyId, role, connection = db) {
          FROM users
          WHERE academy_id = ?
            AND role = ?
+           AND COALESCE(academy_access_status, 'active') <> 'restricted'
          ORDER BY created_at ASC, id ASC`,
         [academyId, normalizedRole]
     );
@@ -4339,7 +4572,7 @@ async function getAcademyRoleSeatState(academyId, role, connection = db) {
         current: rows.length,
         limit,
         activeCount: activeUsers.length,
-        overflowCount: Math.max(0, rows.length - activeUsers.length),
+        overflowCount: limit > 0 ? Math.max(0, rows.length - limit) : 0,
         activeUserIds,
         activeUsers,
         allUsers: rows
@@ -4353,12 +4586,13 @@ async function getUserSeatAccessState(userId, role, connection = db) {
         return {
             allowed: false,
             academyId: '',
-            seatState: null
+            seatState: null,
+            restricted: false
         };
     }
 
     const [rows] = await connection.query(
-        `SELECT id, academy_id
+        `SELECT id, academy_id, academy_access_status
          FROM users
          WHERE id = ?
            AND role = ?
@@ -4368,11 +4602,22 @@ async function getUserSeatAccessState(userId, role, connection = db) {
 
     const user = rows[0] || null;
     const academyId = String(user?.academy_id || '').trim();
+    const isRestricted = normalizeAcademyAccessStatus(user?.academy_access_status) === 'restricted';
     if (!user || !academyId) {
         return {
             allowed: false,
             academyId,
-            seatState: null
+            seatState: null,
+            restricted: false
+        };
+    }
+
+    if (isRestricted) {
+        return {
+            allowed: false,
+            academyId,
+            seatState: null,
+            restricted: true
         };
     }
 
@@ -4380,8 +4625,78 @@ async function getUserSeatAccessState(userId, role, connection = db) {
     return {
         allowed: seatState.activeUserIds.has(normalizedUserId),
         academyId,
-        seatState
+        seatState,
+        restricted: false
     };
+}
+
+async function getAcademyMonitoredUsers(academyId, role, connection = db) {
+    const normalizedRole = normalizeRole(role);
+    if (!academyId || !normalizedRole) {
+        return [];
+    }
+
+    const [rows] = await connection.query(
+        `SELECT
+            id,
+            username,
+            email,
+            role,
+            created_at,
+            academy_access_status,
+            academy_access_last_login_at,
+            academy_access_restricted_at
+         FROM users
+         WHERE academy_id = ?
+           AND role = ?
+         ORDER BY
+            CASE WHEN COALESCE(academy_access_status, 'active') = 'restricted' THEN 1 ELSE 0 END ASC,
+            COALESCE(academy_access_last_login_at, created_at) DESC,
+            id DESC`,
+        [academyId, normalizedRole]
+    );
+
+    return rows.map((row) => ({
+        id: Number(row.id),
+        name: row.username || `${getAccessRoleLabel(normalizedRole)} User`,
+        email: row.email || '',
+        role: normalizedRole,
+        access_status: normalizeAcademyAccessStatus(row.academy_access_status),
+        joined_at: row.created_at,
+        last_login_at: row.academy_access_last_login_at,
+        restricted_at: row.academy_access_restricted_at
+    }));
+}
+
+async function findAcademyUserForSessionStatus(role, userId, email, connection = db) {
+    const normalizedRole = normalizeRole(role);
+    const normalizedUserId = asPositiveInt(userId);
+    const normalizedEmail = normalizeCustomerEmail(email);
+    if (!normalizedRole || (!normalizedUserId && !normalizedEmail)) {
+        return null;
+    }
+
+    if (normalizedUserId) {
+        const [rows] = await connection.query(
+            `SELECT id, email, role, academy_id, academy_access_status
+             FROM users
+             WHERE id = ?
+               AND role = ?
+             LIMIT 1`,
+            [normalizedUserId, normalizedRole]
+        );
+        return rows[0] || null;
+    }
+
+    const [rows] = await connection.query(
+        `SELECT id, email, role, academy_id, academy_access_status
+         FROM users
+         WHERE email = ?
+           AND role = ?
+         LIMIT 1`,
+        [normalizedEmail, normalizedRole]
+    );
+    return rows[0] || null;
 }
 
 async function logAccessAttempt(academyId, type, status, reason, email, connection = db) {
@@ -4467,7 +4782,7 @@ app.post('/api/access/register', async (req, res) => {
 
         if (!academyId) {
             academyId = generateUUID();
-            const accessCode = await generateUniqueAccessCode(connection);
+            const accessCode = await generateUniqueAccessCode(academyName, connection);
 
             await connection.query(
                 `INSERT INTO academies (
@@ -4582,16 +4897,22 @@ app.get('/api/access/dashboard', accessOwnerAuth, async (req, res) => {
         const [
             instructorSeatState,
             studentSeatState,
+            instructorMonitoringRows,
+            studentMonitoringRows,
             [paymentRows],
             [planRows],
+            [paidPlanRows],
             [attemptRows]
         ] = await Promise.all([
             getAcademyRoleSeatState(academyId, 'instructor'),
             getAcademyRoleSeatState(academyId, 'student'),
+            getAcademyMonitoredUsers(academyId, 'instructor'),
+            getAcademyMonitoredUsers(academyId, 'student'),
             db.query(
                 `SELECT id, plan_id, plan_name, amount, currency, status, payment_reference, created_at
                  FROM academy_payments
                  WHERE academy_id = ?
+                   AND amount > 0
                  ORDER BY created_at DESC, id DESC
                  LIMIT 12`,
                 [academyId]
@@ -4600,6 +4921,15 @@ app.get('/api/access/dashboard', accessOwnerAuth, async (req, res) => {
                 `SELECT id, name, max_instructors, max_students, price, description
                  FROM plans
                  ORDER BY CASE WHEN price = 0 THEN 999999 ELSE price END ASC, id ASC`
+            ),
+            db.query(
+                `SELECT DISTINCT plan_id
+                 FROM academy_payments
+                 WHERE academy_id = ?
+                   AND customer_id = ?
+                   AND amount > 0
+                   AND status = 'completed'`,
+                [academyId, req.accessOwner.customer_id]
             ),
             db.query(
                 `SELECT type, status, reason, email, timestamp
@@ -4615,10 +4945,13 @@ app.get('/api/access/dashboard', accessOwnerAuth, async (req, res) => {
         const studentCount = Number(studentSeatState.activeCount || 0);
         const instructorUsage = buildAccessUsageMetric('Instructor', instructorCount, req.accessOwner.max_instructors);
         const studentUsage = buildAccessUsageMetric('Student', studentCount, req.accessOwner.max_students);
+        const paidPlanIds = new Set(
+            paidPlanRows.map((row) => Number(row.plan_id || 0)).filter(Boolean)
+        );
         const warnings = [];
 
         if (Number(instructorSeatState.overflowCount || 0) > 0) {
-            warnings.push('Instructor access code limit exceeded. Extra instructor accounts are blocked and must use another access code unless the owner upgrades the plan.');
+            warnings.push('Instructor access is above the current plan capacity. Restrict unused instructor accounts from Monitoring or upgrade the plan to restore healthy capacity.');
         } else if (instructorUsage.exceeded) {
             warnings.push('Instructor limit exceeded for the current plan. New instructor registrations and logins with this access code are blocked until you upgrade the plan.');
         } else if (instructorUsage.near_limit) {
@@ -4626,7 +4959,7 @@ app.get('/api/access/dashboard', accessOwnerAuth, async (req, res) => {
         }
 
         if (Number(studentSeatState.overflowCount || 0) > 0) {
-            warnings.push('Student access code limit exceeded. Extra student accounts are blocked and must use another access code unless the owner upgrades the plan.');
+            warnings.push('Student access is above the current plan capacity. Restrict unused student accounts from Monitoring or upgrade the plan to restore healthy capacity.');
         } else if (studentUsage.exceeded) {
             warnings.push('Student limit exceeded for the current plan. New student registrations and logins with this access code are blocked until you upgrade the plan.');
         } else if (studentUsage.near_limit) {
@@ -4646,6 +4979,10 @@ app.get('/api/access/dashboard', accessOwnerAuth, async (req, res) => {
                 instructors: instructorUsage,
                 students: studentUsage
             },
+            monitoring: {
+                instructors: instructorMonitoringRows,
+                students: studentMonitoringRows
+            },
             warnings,
             plans: planRows.map((plan) => ({
                 id: Number(plan.id),
@@ -4653,7 +4990,13 @@ app.get('/api/access/dashboard', accessOwnerAuth, async (req, res) => {
                 max_instructors: Number(plan.max_instructors || 0),
                 max_students: Number(plan.max_students || 0),
                 price: Number(plan.price || 0),
-                description: plan.description || ''
+                description: plan.description || '',
+                is_paid_before: paidPlanIds.has(Number(plan.id || 0)),
+                activation_mode: Number(plan.price || 0) <= 0
+                    ? 'free'
+                    : paidPlanIds.has(Number(plan.id || 0))
+                        ? 'reactivate'
+                        : 'purchase'
             })),
             payments: paymentRows.map((payment) => ({
                 id: Number(payment.id),
@@ -4681,6 +5024,176 @@ app.get('/api/access/dashboard', accessOwnerAuth, async (req, res) => {
             error: error.message
         });
     }
+});
+
+app.get('/api/access/session-status', async (req, res) => {
+    const role = normalizeRole(req.query.role);
+    const userId = asPositiveInt(req.query.userId || req.query.user_id);
+    const email = normalizeCustomerEmail(req.query.email);
+
+    if (!role || (!userId && !email)) {
+        return res.status(400).json({
+            success: false,
+            message: 'A valid role and user reference are required.'
+        });
+    }
+
+    try {
+        const user = await findAcademyUserForSessionStatus(role, userId, email);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                allowed: false,
+                reason: 'session_invalid',
+                message: 'This account could not be found. Please login again.'
+            });
+        }
+
+        const seatAccess = await getUserSeatAccessState(user.id, role);
+        if (seatAccess.restricted) {
+            return res.json({
+                success: true,
+                allowed: false,
+                reason: 'restricted_by_admin',
+                message: buildRestrictedAccessMessage(role)
+            });
+        }
+
+        if (!seatAccess.allowed) {
+            return res.json({
+                success: true,
+                allowed: false,
+                reason: 'use_another_code',
+                message: buildUseAnotherAccessCodeMessage(role)
+            });
+        }
+
+        return res.json({
+            success: true,
+            allowed: true,
+            reason: 'allowed',
+            message: `${getAccessRoleLabel(role)} session is active.`
+        });
+    } catch (error) {
+        console.error('Access session status error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to verify access session status',
+            error: error.message
+        });
+    }
+});
+
+async function handleAccessMemberStatusUpdate(req, res) {
+    const userId = asPositiveInt(req.params.userId);
+    const role = normalizeRole(req.body.role);
+    const requestedStatus = String(req.body.access_status || req.body.accessStatus || '').trim().toLowerCase();
+    const nextStatus = requestedStatus === 'restricted'
+        ? 'restricted'
+        : requestedStatus === 'active'
+            ? 'active'
+            : '';
+
+    if (!userId) {
+        return res.status(400).json({
+            success: false,
+            message: 'A valid user ID is required'
+        });
+    }
+
+    if (!role) {
+        return res.status(400).json({
+            success: false,
+            message: 'A valid role is required'
+        });
+    }
+
+    if (!nextStatus) {
+        return res.status(400).json({
+            success: false,
+            message: 'A valid access status is required'
+        });
+    }
+
+    try {
+        const [rows] = await db.query(
+            `SELECT id, username, email, role, academy_id, academy_access_status
+             FROM users
+             WHERE id = ?
+               AND role = ?
+               AND academy_id = ?
+             LIMIT 1`,
+            [userId, role, req.accessOwner.academy_id]
+        );
+
+        const member = rows[0] || null;
+        if (!member) {
+            return res.status(404).json({
+                success: false,
+                message: 'This academy member was not found.'
+            });
+        }
+
+        const currentStatus = normalizeAcademyAccessStatus(member.academy_access_status);
+        const roleLabel = getAccessRoleLabel(role);
+        if (currentStatus === 'restricted' && nextStatus === 'active') {
+            const capacity = await getAcademyRoleCapacity(req.accessOwner.academy_id, role);
+            if (capacity.limit <= 0 || capacity.current >= capacity.limit) {
+                return res.status(409).json({
+                    success: false,
+                    message: `${roleLabel} access cannot be allowed right now because all active seats are already full. Restrict another active ${role} or upgrade the plan first.`
+                });
+            }
+        }
+
+        if (currentStatus !== nextStatus) {
+            await db.query(
+                `UPDATE users
+                 SET academy_access_status = ?,
+                     academy_access_restricted_at = CASE WHEN ? = 'restricted' THEN NOW() ELSE NULL END
+                 WHERE id = ?`,
+                [nextStatus, nextStatus, userId]
+            );
+        }
+
+        const message = nextStatus === 'restricted'
+            ? `${member.username || roleLabel} has been restricted from using this academy access code.`
+            : `${member.username || roleLabel} can use this academy access code again.`;
+
+        return res.json({
+            success: true,
+            message,
+            member: {
+                id: Number(member.id),
+                name: member.username || `${roleLabel} User`,
+                email: member.email || '',
+                role,
+                access_status: nextStatus
+            }
+        });
+    } catch (error) {
+        console.error('Academy member access update error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update academy member access',
+            error: error.message
+        });
+    }
+}
+
+app.patch('/api/access/members/:userId/access-status', accessOwnerAuth, handleAccessMemberStatusUpdate);
+app.post('/api/access/members/:userId/access-status', accessOwnerAuth, handleAccessMemberStatusUpdate);
+
+app.get('/api/access/payment-config', accessOwnerAuth, (req, res) => {
+    const credentials = getRazorpayCredentials();
+
+    return res.json({
+        success: true,
+        ready: credentials.ready,
+        message: credentials.ready
+            ? 'Razorpay payment gateway is configured.'
+            : 'Razorpay payment gateway is not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to backend/.env.'
+    });
 });
 
 // ACCESS OWNER - Create a Razorpay order for a paid plan
@@ -4730,6 +5243,20 @@ app.post('/api/access/orders', accessOwnerAuth, async (req, res) => {
             return res.status(409).json({
                 success: false,
                 message: `${plan.name} is already the active plan.`
+            });
+        }
+
+        const reusablePayment = await findReusablePlanPayment(connection, {
+            academyId: req.accessOwner.academy_id,
+            customerId: req.accessOwner.customer_id,
+            planId: Number(plan.id)
+        });
+
+        if (reusablePayment) {
+            await connection.rollback();
+            return res.status(409).json({
+                success: false,
+                message: `${plan.name} was already purchased for this academy. Switch to it directly from the dashboard without paying again.`
             });
         }
 
@@ -4845,6 +5372,7 @@ app.post('/api/access/subscription', accessOwnerAuth, async (req, res) => {
         }
 
         let verifiedPaymentOrder = null;
+        let reusablePayment = null;
         if (Number(plan.price || 0) > 0) {
             const [paymentOrderRows] = await connection.query(
                 `SELECT id, razorpay_order_id, razorpay_payment_id, currency
@@ -4863,15 +5391,23 @@ app.post('/api/access/subscription', accessOwnerAuth, async (req, res) => {
                 ]
             );
 
-            if (paymentOrderRows.length === 0) {
+            verifiedPaymentOrder = paymentOrderRows[0] || null;
+
+            if (!verifiedPaymentOrder) {
+                reusablePayment = await findReusablePlanPayment(connection, {
+                    academyId: req.accessOwner.academy_id,
+                    customerId: req.accessOwner.customer_id,
+                    planId: Number(plan.id)
+                });
+            }
+
+            if (!verifiedPaymentOrder && !reusablePayment) {
                 await connection.rollback();
                 return res.status(402).json({
                     success: false,
                     message: `Complete payment for the ${plan.name} plan before activating it.`
                 });
             }
-
-            verifiedPaymentOrder = paymentOrderRows[0];
         }
 
         await connection.query(
@@ -4882,16 +5418,31 @@ app.post('/api/access/subscription', accessOwnerAuth, async (req, res) => {
             [plan.id, req.accessOwner.academy_id, req.accessOwner.customer_id]
         );
 
-        const paymentReference = await insertAcademyPayment(connection, {
-            academyId: req.accessOwner.academy_id,
-            customerId: req.accessOwner.customer_id,
-            planId: Number(plan.id),
-            planName: plan.name,
-            amount: Number(plan.price || 0),
-            currency: verifiedPaymentOrder?.currency || 'INR',
-            status: 'completed',
-            paymentReference: verifiedPaymentOrder?.razorpay_payment_id || verifiedPaymentOrder?.razorpay_order_id
-        });
+        let paymentReference = reusablePayment?.payment_reference || null;
+        let successMessage = `${plan.name} plan activated successfully.`;
+
+        if (verifiedPaymentOrder) {
+            paymentReference = await insertAcademyPayment(connection, {
+                academyId: req.accessOwner.academy_id,
+                customerId: req.accessOwner.customer_id,
+                planId: Number(plan.id),
+                planName: plan.name,
+                amount: Number(plan.price || 0),
+                currency: verifiedPaymentOrder?.currency || 'INR',
+                status: 'completed',
+                paymentReference: verifiedPaymentOrder?.razorpay_payment_id || verifiedPaymentOrder?.razorpay_order_id
+            });
+        } else if (!reusablePayment && Number(plan.price || 0) > 0) {
+            paymentReference = await insertAcademyPayment(connection, {
+                academyId: req.accessOwner.academy_id,
+                customerId: req.accessOwner.customer_id,
+                planId: Number(plan.id),
+                planName: plan.name,
+                amount: Number(plan.price || 0),
+                currency: 'INR',
+                status: 'completed'
+            });
+        }
 
         if (verifiedPaymentOrder) {
             await connection.query(
@@ -4904,6 +5455,10 @@ app.post('/api/access/subscription', accessOwnerAuth, async (req, res) => {
             );
         }
 
+        if (reusablePayment) {
+            successMessage = `${plan.name} plan activated using your previous payment.`;
+        }
+
         const updatedContext = await getAccessOwnerContext(
             req.accessOwner.customer_id,
             req.accessOwner.academy_id,
@@ -4914,7 +5469,7 @@ app.post('/api/access/subscription', accessOwnerAuth, async (req, res) => {
 
         return res.json({
             success: true,
-            message: `${plan.name} plan activated successfully.`,
+            message: successMessage,
             payment_reference: paymentReference,
             summary: buildAccessOwnerSummary(req, updatedContext)
         });
@@ -5248,7 +5803,7 @@ app.post('/api/subscribe', async (req, res) => {
 
         // Generate academy ID and access code
         const academyId = generateUUID();
-        const accessCode = await generateUniqueAccessCode();
+        const accessCode = await generateUniqueAccessCode(academy_name);
 
         // Create academy
         const [planResult] = await db.query(

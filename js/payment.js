@@ -26,8 +26,9 @@ const FALLBACK_PLAN_CATALOG = {
 
 let accessSession = null;
 let paymentContext = null;
+let paymentGatewayReady = true;
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     accessSession = readStoredJson(ACCESS_SESSION_STORAGE_KEY);
 
     if (!accessSession?.token) {
@@ -51,11 +52,40 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPaymentSummary();
     prefillOwnerFields();
     bindPaymentEvents();
+    await checkPaymentAvailability();
 });
 
 function bindPaymentEvents() {
     const checkoutForm = document.getElementById('paymentCheckoutForm');
     checkoutForm?.addEventListener('submit', handleCheckoutSubmit);
+}
+
+async function checkPaymentAvailability() {
+    try {
+        const config = await requestAccess('/payment-config', {
+            token: accessSession?.token
+        });
+
+        paymentGatewayReady = Boolean(config?.ready);
+        if (!paymentGatewayReady) {
+            setPayAvailability(false, 'Payments Unavailable');
+            showPaymentNotice(
+                config?.message || 'Online payments are unavailable right now. Configure Razorpay in backend/.env first.',
+                'warning'
+            );
+            return;
+        }
+
+        paymentGatewayReady = true;
+        setPayAvailability(true);
+    } catch (error) {
+        paymentGatewayReady = false;
+        setPayAvailability(false, 'Payments Unavailable');
+        showPaymentNotice(
+            error.message || 'Unable to verify payment gateway availability right now.',
+            'warning'
+        );
+    }
 }
 
 function resolvePaymentContext() {
@@ -163,6 +193,14 @@ async function handleCheckoutSubmit(event) {
 
     if (!accessSession?.token) {
         showPaymentNotice('Your owner session expired. Please login again.', 'error');
+        return;
+    }
+
+    if (!paymentGatewayReady) {
+        showPaymentNotice(
+            'Online payments are unavailable because Razorpay is not configured on the server. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in backend/.env.',
+            'error'
+        );
         return;
     }
 
@@ -324,6 +362,20 @@ function setSubmitBusy(busy, busyLabel = 'Processing...') {
 
     payButton.disabled = busy;
     payButton.textContent = busy ? busyLabel : payButton.dataset.defaultLabel;
+}
+
+function setPayAvailability(enabled, disabledLabel = 'Unavailable') {
+    const payButton = document.getElementById('payButton');
+    if (!payButton) {
+        return;
+    }
+
+    if (!payButton.dataset.defaultLabel) {
+        payButton.dataset.defaultLabel = payButton.textContent;
+    }
+
+    payButton.disabled = !enabled;
+    payButton.textContent = enabled ? payButton.dataset.defaultLabel : disabledLabel;
 }
 
 function showPaymentNotice(message, tone = 'info', forceHide = false) {

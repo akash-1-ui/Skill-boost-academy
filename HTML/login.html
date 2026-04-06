@@ -16,25 +16,25 @@
       <a class="back-link" href="index.html#access">Back to home</a>
       <div>
         <p class="eyebrow">Skill Boost Nexus Access</p>
-        <h1>Sign in and get back to your dashboard.</h1>
-        <p class="auth-intro-copy">Choose student or instructor access and continue your courses or teaching work without extra steps.</p>
+        <h1 id="loginIntroTitle">Sign in as an instructor and return to your teaching dashboard.</h1>
+        <p id="loginIntroCopy" class="auth-intro-copy">Use your academy access code to manage courses, upload lessons, and support learners from one place.</p>
       </div>
-      <div class="auth-feature-grid">
-        <article class="auth-feature-card">
-          <strong>Student Studio</strong>
-          <p>Resume lessons, track progress, and return to learning quickly.</p>
-        </article>
-        <article class="auth-feature-card">
-          <strong>Instructor Studio</strong>
-          <p>Upload lessons, manage courses, and review learner activity in one place.</p>
-        </article>
-      </div>
-      <div class="auth-signal">
+      <section class="login-role-overview" aria-live="polite">
+        <span id="loginRoleBadge" class="login-role-badge">Instructor Access</span>
+        <h3 id="loginRoleFeatureTitle" class="login-role-feature-title">Features available for instructors</h3>
+        <ul id="loginRoleFeatureList" class="login-role-feature-list">
+          <li>Create and manage academy courses from one dashboard.</li>
+          <li>Upload videos and organize learning materials.</li>
+          <li>Monitor student enrollment and course activity.</li>
+          <li>Share announcements and updates with students.</li>
+        </ul>
+      </section>
+      <div class="auth-signal login-role-tip">
         <div>
-          <strong>Quick account recovery</strong>
-          <p>Forgot password, role switching, and simple forms help you get back in faster.</p>
+          <strong id="loginRoleTipTitle">Instructor sign-in tip</strong>
+          <p id="loginRoleTipText">Use the academy access code shared by the academy owner to open the correct instructor workspace.</p>
         </div>
-        <span class="auth-signal-badge">Easy Access</span>
+        <span id="loginRoleTipBadge" class="auth-signal-badge">Instructor</span>
       </div>
     </section>
 
@@ -124,7 +124,7 @@
     <div class="forgot-modal-content" role="dialog" aria-modal="true" aria-labelledby="forgotPasswordTitle">
       <button type="button" id="forgotCloseBtn" class="forgot-close" aria-label="Close">&times;</button>
       <h3 id="forgotPasswordTitle">Reset your password</h3>
-      <p class="forgot-subtitle">Use your registered mobile number to receive a verification code.</p>
+      <p class="forgot-subtitle">Use your registered Gmail address to receive a verification code.</p>
 
       <div id="forgotStepRequest" class="forgot-step">
         <label for="forgotRole">Role</label>
@@ -133,30 +133,45 @@
           <option value="instructor">Instructor</option>
         </select>
 
-        <label for="forgotPhone">Mobile Number</label>
-        <input type="tel" id="forgotPhone" name="phone" placeholder="Enter your registered mobile number" inputmode="numeric" />
+        <label for="forgotEmail">Gmail Address</label>
+        <input type="email" id="forgotEmail" name="email" placeholder="Enter your registered Gmail address" autocomplete="email" />
 
         <button type="button" id="sendResetCodeBtn">Send Code</button>
       </div>
 
       <div id="forgotStepVerify" class="forgot-step" style="display: none;">
+        <p id="forgotDeliveryNote" class="forgot-delivery-note">We sent a 6-digit verification code to your email.</p>
+
         <label for="forgotOtp">Verification Code</label>
         <input type="text" id="forgotOtp" name="otp" placeholder="Enter the 6-digit code" inputmode="numeric" maxlength="6" />
 
+        <div class="forgot-otp-meta">
+          <span id="forgotOtpTimer" class="forgot-otp-timer">Code expires in 02:00</span>
+          <button type="button" id="resendResetCodeBtn" class="forgot-inline-btn" hidden disabled>Resend Code</button>
+        </div>
+
+        <button type="button" id="verifyResetCodeBtn">Verify Code</button>
+      </div>
+
+      <form id="forgotStepReset" class="forgot-step" style="display: none;">
+        <p class="forgot-delivery-note">Verification successful. Create a new password to sign in again.</p>
+
+        <input type="email" id="forgotResetEmail" name="resetEmail" autocomplete="username" hidden />
+
         <label for="forgotNewPassword">New Password</label>
         <div class="password-field">
-          <input type="password" id="forgotNewPassword" name="newPassword" placeholder="Create a new password" />
+          <input type="password" id="forgotNewPassword" name="newPassword" placeholder="Create a new password" autocomplete="new-password" />
           <button type="button" class="password-toggle" onclick="togglePassword('forgotNewPassword', this)">Show</button>
         </div>
 
         <label for="forgotConfirmPassword">Confirm Password</label>
         <div class="password-field">
-          <input type="password" id="forgotConfirmPassword" name="confirmPassword" placeholder="Confirm your new password" />
+          <input type="password" id="forgotConfirmPassword" name="confirmPassword" placeholder="Confirm your new password" autocomplete="new-password" />
           <button type="button" class="password-toggle" onclick="togglePassword('forgotConfirmPassword', this)">Show</button>
         </div>
 
-        <button type="button" id="resetPasswordBtn">Reset Password</button>
-      </div>
+        <button type="submit" id="resetPasswordBtn">Reset Password</button>
+      </form>
 
       <p id="forgotStatus" class="forgot-status" aria-live="polite"></p>
     </div>

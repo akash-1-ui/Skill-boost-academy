@@ -2,6 +2,9 @@
   function clearStudentStorage(email) {
     if (!email) return;
     localStorage.removeItem('studentEmail');
+    localStorage.removeItem('studentId');
+    localStorage.removeItem('academyId');
+    localStorage.removeItem('user');
     localStorage.removeItem(`studentName_${email}`);
     localStorage.removeItem(`studentBranch_${email}`);
     localStorage.removeItem(`studentPhoto_${email}`);
@@ -17,6 +20,8 @@
     localStorage.removeItem('instructorEmail');
     localStorage.removeItem('instructorCourse');
     localStorage.removeItem('instructorBio');
+    localStorage.removeItem('academyId');
+    localStorage.removeItem('user');
   }
 
   async function terminateStudentAccount() {

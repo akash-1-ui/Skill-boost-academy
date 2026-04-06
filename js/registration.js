@@ -80,6 +80,18 @@ registerForm.addEventListener('submit', async (event) => {
       return;
     }
 
+    if (payload.access_status === 'restricted') {
+      setRegistrationStatus(
+        payload.message || 'Account created, but access is restricted by the academy admin because all active student seats are full.',
+        'error'
+      );
+      const nextUrl = `login.html?role=student&code=${encodeURIComponent(accessCode)}&email=${encodeURIComponent(email)}&notice=restricted_by_admin`;
+      window.setTimeout(() => {
+        window.location.href = nextUrl;
+      }, 1800);
+      return;
+    }
+
     setRegistrationStatus('', 'info');
     successMessage.style.display = 'block';
 

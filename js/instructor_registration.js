@@ -94,6 +94,18 @@ instructorRegistrationForm.addEventListener('submit', async (event) => {
       return;
     }
 
+    if (payload.access_status === 'restricted') {
+      setInstructorRegistrationStatus(
+        payload.message || 'Account created, but access is restricted by the academy admin because all active instructor seats are full.',
+        'error'
+      );
+      const nextUrl = `login.html?role=instructor&code=${encodeURIComponent(accessCode)}&email=${encodeURIComponent(email)}&notice=restricted_by_admin`;
+      window.setTimeout(() => {
+        window.location.href = nextUrl;
+      }, 1800);
+      return;
+    }
+
     setInstructorRegistrationStatus('', 'info');
     instructorSuccessMessage.style.display = 'block';
 

@@ -423,6 +423,10 @@ function getMessageRequestConfig(tabName) {
     return { groupType: 'students', category: 'instructor_message' };
   }
 
+  if (!isStudentUser() && tabName === 'students') {
+    return { groupType: 'students', category: 'instructor_message' };
+  }
+
   return { groupType: getSafeTab(tabName), category: '' };
 }
 

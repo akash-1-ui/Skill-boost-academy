@@ -66,6 +66,7 @@
                             <button type="button" class="quick-access-link" data-scroll-target="dashboardOverviewSection">Dashboard Overview</button>
                             <button type="button" class="quick-access-link" data-scroll-target="dashboardCodeSection">Academy Access Code</button>
                             <button type="button" class="quick-access-link" data-scroll-target="dashboardCapacitySection">Capacity &amp; Usage</button>
+                            <button type="button" class="quick-access-link" data-scroll-target="dashboardMonitoringSection">Monitoring</button>
                             <button type="button" class="quick-access-link" data-scroll-target="dashboardJoinLinkSection">Academy Join Link</button>
                             <button type="button" class="quick-access-link" data-scroll-target="dashboardPlansSection">Subscription Plans</button>
                             <button type="button" class="quick-access-link" data-scroll-target="dashboardPaymentsSection">Payment History</button>
@@ -82,7 +83,7 @@
         <section id="dashboardSection" class="dashboard-shell" tabindex="-1">
             <div class="dashboard-toolbar">
                 <div>
-                    <p class="eyebrow">Owner Dashboard</p>
+                    <p class="eyebrow">Admin Dashboard</p>
                     <h2 id="dashboardTitle">Academy dashboard</h2>
                     <p id="dashboardSubtitle">Manage access, subscription plans, payment history, and invite access from one place.</p>
                 </div>
@@ -97,7 +98,7 @@
                 </article>
 
                 <article class="surface info-card">
-                    <span class="info-label">Owner</span>
+                    <span class="info-label">Admin</span>
                     <strong id="ownerNameValue" class="info-value">-</strong>
                     <small id="ownerEmailValue">-</small>
                 </article>
@@ -159,6 +160,91 @@
                 </div>
 
                 <div id="warningList" class="warning-stack"></div>
+            </section>
+
+            <section id="dashboardMonitoringSection" class="surface monitoring-section quick-access-target">
+                <div class="section-header">
+                    <h3>Monitoring</h3>
+                    <p>See which students and instructors joined with your academy access code and manage their access.</p>
+                </div>
+
+                <div class="monitoring-grid">
+                    <article class="monitoring-card">
+                        <div class="monitoring-card-header">
+                            <div>
+                                <span class="monitoring-card-label">Instructor Access</span>
+                                <h4>Instructors Using This Code</h4>
+                                <p class="monitoring-card-copy">Review instructor accounts linked to this academy code and manage access when needed.</p>
+                            </div>
+                            <label class="monitoring-search" for="monitoringInstructorSearch">
+                                <span class="visually-hidden">Search instructors using this code</span>
+                                <input
+                                    id="monitoringInstructorSearch"
+                                    type="search"
+                                    placeholder="Search instructors by name or email"
+                                    autocomplete="off"
+                                    data-monitoring-search="instructor">
+                            </label>
+                        </div>
+
+                        <div class="table-wrap monitoring-table-wrap">
+                            <table class="monitoring-table">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Status</th>
+                                        <th>Joined</th>
+                                        <th>Last Login</th>
+                                        <th>Manage</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="monitoringInstructorsTableBody">
+                                    <tr>
+                                        <td colspan="5" class="empty-cell">No instructor accounts yet.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+
+                    <article class="monitoring-card">
+                        <div class="monitoring-card-header">
+                            <div>
+                                <span class="monitoring-card-label">Student Access</span>
+                                <h4>Students Using This Code</h4>
+                                <p class="monitoring-card-copy">See who joined with your academy code and quickly restrict or allow them again.</p>
+                            </div>
+                            <label class="monitoring-search" for="monitoringStudentSearch">
+                                <span class="visually-hidden">Search students using this code</span>
+                                <input
+                                    id="monitoringStudentSearch"
+                                    type="search"
+                                    placeholder="Search students by name or email"
+                                    autocomplete="off"
+                                    data-monitoring-search="student">
+                            </label>
+                        </div>
+
+                        <div class="table-wrap monitoring-table-wrap">
+                            <table class="monitoring-table">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Status</th>
+                                        <th>Joined</th>
+                                        <th>Last Login</th>
+                                        <th>Manage</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="monitoringStudentsTableBody">
+                                    <tr>
+                                        <td colspan="5" class="empty-cell">No student accounts yet.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+                </div>
             </section>
 
             <section id="dashboardJoinLinkSection" class="surface invite-section quick-access-target">

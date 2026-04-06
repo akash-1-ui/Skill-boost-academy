@@ -121,7 +121,7 @@
                         </div>
                         <div class="stat-card-value-row">
                             <p class="stat-value" id="totalWatchHours">0</p>
-                            <span class="stat-card-unit">hours</span>
+                            <span class="stat-card-unit" id="totalWatchHoursUnit">hr</span>
                         </div>
                     </article>
                 </div>
@@ -133,7 +133,7 @@
                                 <p class="section-kicker">Performance Analytics</p>
                                 <h3 class="analytics-title">Track Your Impact</h3>
                             </div>
-                            <p class="analytics-description">Monitor course performance and learner engagement metrics.</p>
+                         
                         </div>
                         <div class="dashboard-switcher-tabs" role="tablist" aria-label="Dashboard analytics views">
                             <button
@@ -451,6 +451,8 @@
         const instructorPhoto = localStorage.getItem('instructorPhoto');
         const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
         const API_BASE = 'http://localhost:3000';
+        const INSTRUCTOR_ACCESS_POLL_MS = 10000;
+        let instructorAccessPollHandle = null;
 
         function clearInstructorSession() {
             localStorage.removeItem('instructorId');
@@ -460,6 +462,82 @@
             localStorage.removeItem('instructorCourse');
             localStorage.removeItem('instructorBio');
             localStorage.removeItem('academyId');
+            localStorage.removeItem('user');
+        }
+
+        function buildInstructorLoginRedirect(notice) {
+            const params = new URLSearchParams({
+                role: 'instructor',
+                notice: notice || 'restricted_by_admin'
+            });
+            const instructorEmail = localStorage.getItem('instructorEmail');
+            if (instructorEmail) {
+                params.set('email', instructorEmail);
+            }
+            return `login.html?${params.toString()}`;
+        }
+
+        function resolveAccessNotice(message) {
+            const normalized = String(message || '').toLowerCase();
+            return normalized.includes('restricted by the academy admin')
+                ? 'restricted_by_admin'
+                : 'use_another_code';
+        }
+
+        function handleInstructorAccessRevoked(message, notice = 'restricted_by_admin') {
+            const formattedMessage = message || 'Access restricted by academy admin. You have been logged out. Contact the academy admin to restore access.';
+            clearInstructorSession();
+            alert(`Access Update\n\n${formattedMessage}`);
+            window.location.href = buildInstructorLoginRedirect(notice);
+        }
+
+        async function checkInstructorSessionAccess() {
+            const currentInstructorId = localStorage.getItem('instructorId');
+            const instructorEmail = localStorage.getItem('instructorEmail') || '';
+            if (!currentInstructorId && !instructorEmail) {
+                window.location.href = buildInstructorLoginRedirect('restricted_by_admin');
+                return false;
+            }
+
+            try {
+                const params = new URLSearchParams({
+                    role: 'instructor'
+                });
+                if (currentInstructorId) {
+                    params.set('userId', currentInstructorId);
+                }
+                if (instructorEmail) {
+                    params.set('email', instructorEmail);
+                }
+
+                const response = await fetch(`${API_BASE}/api/access/session-status?${params.toString()}`, {
+                    cache: 'no-store'
+                });
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    throw new Error(payload.message || 'Unable to verify instructor access.');
+                }
+
+                if (payload.allowed === false) {
+                    handleInstructorAccessRevoked(payload.message, payload.reason || 'restricted_by_admin');
+                    return false;
+                }
+
+                return true;
+            } catch (error) {
+                console.error('Instructor session check failed:', error);
+                return true;
+            }
+        }
+
+        function startInstructorAccessPolling() {
+            if (instructorAccessPollHandle) {
+                clearInterval(instructorAccessPollHandle);
+            }
+            instructorAccessPollHandle = setInterval(() => {
+                checkInstructorSessionAccess();
+            }, INSTRUCTOR_ACCESS_POLL_MS);
         }
 
         function normalizePhoto(value) {
@@ -1030,9 +1108,7 @@
 
                 if (!response.ok) {
                     if (response.status === 403) {
-                        clearInstructorSession();
-                        alert(data.error || 'This access code cannot be used for this instructor anymore. Please use another access code.');
-                        window.location.href = 'login.html?role=instructor&notice=use_another_code';
+                        handleInstructorAccessRevoked(data.error, resolveAccessNotice(data.error));
                         return;
                     }
                     throw new Error(data.error || 'Failed to load dashboard data');
@@ -1042,7 +1118,10 @@
                 document.getElementById('totalCourses').textContent = metrics.totalCourses || 0;
                 document.getElementById('totalStudents').textContent = metrics.totalStudents || 0;
                 document.getElementById('expiringCourses').textContent = metrics.expiringCourses || 0;
-                document.getElementById('totalWatchHours').textContent = formatWatchHours(metrics.totalWatchHours || 0);
+                const watchTimeDisplay = formatWatchHours(metrics.totalWatchHours || 0);
+                document.getElementById('totalWatchHours').textContent = watchTimeDisplay.value;
+                const totalWatchHoursUnit = document.getElementById('totalWatchHoursUnit');
+                if (totalWatchHoursUnit) totalWatchHoursUnit.textContent = watchTimeDisplay.unit;
 
                 document.getElementById('latestUpload').textContent = formatDate(metrics.latestUpload);
 
@@ -1156,17 +1235,25 @@
             
             // If less than 1 hour (59 minutes or less)
             if (totalMinutes < 60) {
-                return `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
+                return {
+                    value: String(totalMinutes),
+                    unit: `minute${totalMinutes === 1 ? '' : 's'}`
+                };
             }
             
             // If 1 hour or more
             const decimalHours = (totalMinutes / 60).toFixed(2);
-            return `${decimalHours}hr`;
+            return {
+                value: decimalHours,
+                unit: 'hr'
+            };
         }
 
         window.addEventListener('load', () => {
             handleCourseEditRequest();
             handleCourseVideoRequest();
+            checkInstructorSessionAccess();
+            startInstructorAccessPolling();
         });
 
         // Modal event listeners
@@ -1188,6 +1275,12 @@
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
                 closeCourseDetailsModal();
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (instructorAccessPollHandle) {
+                clearInterval(instructorAccessPollHandle);
             }
         });
 
