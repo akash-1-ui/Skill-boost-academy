@@ -200,10 +200,13 @@
   </div>
   <div class="drawer-overlay" id="profileOverlay"></div>
 
+  <script src="../js/app-config.js"></script>
   <script src="../js/theme_mode.js?v=20260331-theme-toggle"></script>
   <script src="../js/profile_drawer.js"></script>
   <script src="../js/account_actions.js"></script>
   <script>
+    const API_BASE = window.SkillBoostApp?.apiBase || window.location.origin;
+    const buildApiUrl = window.SkillBoostApp?.buildApiUrl || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
     const toggleBtn = document.getElementById('studentProfileIcon');
     const sidebar = document.getElementById('sidebar');
     const exploreBtn = document.getElementById('exploreBtn');
@@ -241,7 +244,7 @@
       try {
         const studentEmail = localStorage.getItem('studentEmail') || '';
         const query = studentEmail ? `?studentEmail=${encodeURIComponent(studentEmail)}` : '';
-        const response = await fetch(`http://localhost:3000/api/courses${query}`);
+        const response = await fetch(buildApiUrl(`/api/courses${query}`));
         if (!response.ok) {
           throw new Error(`Failed to fetch courses (${response.status})`);
         }
@@ -265,7 +268,6 @@
       }
     }
 
-    const API_BASE = 'http://localhost:3000';
     const STUDENT_NOTIFICATIONS_POLL_MS = 12000;
     const STUDENT_NOTIFICATIONS_SEEN_PREFIX = 'studentNotificationsLastSeen_';
     const STUDENT_ACCESS_POLL_MS = 10000;
@@ -547,7 +549,7 @@
             alert('Please login to enroll in this course');
             return;
           }
-          fetch('http://localhost:3000/api/enroll', {
+          fetch(buildApiUrl('/api/enroll'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ studentEmail, courseId: course.id })
@@ -785,7 +787,7 @@
     // Always update localStorage with the latest profile from backend for this student only
     const studentNamePill = document.getElementById('studentNamePill');
     if (studentEmail) {
-      fetch(`http://localhost:3000/api/student-profile?email=${encodeURIComponent(studentEmail)}`)
+      fetch(buildApiUrl(`/api/student-profile?email=${encodeURIComponent(studentEmail)}`))
         .then(res => res.json())
         .then(profile => {
           const normalizedPhoto = normalizePhoto(profile?.photo);
@@ -827,7 +829,7 @@
         const photo = localStorage.getItem(`studentPhoto_${studentEmail}`);
         const normalizedPhoto = normalizePhoto(photo);
         if (normalizedPhoto && normalizedPhoto !== DEFAULT_PROFILE_PHOTO) {
-          fetch('http://localhost:3000/api/student-photo-base64', {
+          fetch(buildApiUrl('/api/student-photo-base64'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: studentEmail, photo: normalizedPhoto })

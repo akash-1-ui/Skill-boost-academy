@@ -35,15 +35,17 @@
         <pre id="plansOutput"></pre>
     </div>
 
+    <script src="../js/app-config.js"></script>
     <script>
         let token = null;
+        const buildApiUrl = window.SkillBoostApp?.buildApiUrl || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
 
         async function testRegister() {
             const output = document.getElementById('registerOutput');
             output.innerHTML = '<p>Loading...</p>';
             
             try {
-                const response = await fetch('http://localhost:3000/api/access/register', {
+                const response = await fetch(buildApiUrl('/api/access/register'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -81,7 +83,7 @@
             output.innerHTML = '<p>Loading...</p>';
             
             try {
-                const response = await fetch('http://localhost:3000/api/access/dashboard', {
+                const response = await fetch(buildApiUrl('/api/access/dashboard'), {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',

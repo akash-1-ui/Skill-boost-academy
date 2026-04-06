@@ -42,6 +42,8 @@ const sendResetCodeBtn = document.getElementById('sendResetCodeBtn');
 const resendResetCodeBtn = document.getElementById('resendResetCodeBtn');
 const verifyResetCodeBtn = document.getElementById('verifyResetCodeBtn');
 const resetPasswordBtn = document.getElementById('resetPasswordBtn');
+const buildApiUrl = window.SkillBoostApp?.buildApiUrl
+  || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
 
 const loginQuery = new URLSearchParams(window.location.search);
 const requestedRole = loginQuery.get('role');
@@ -474,7 +476,7 @@ async function requestResetCode({ isResend = false } = {}) {
   setForgotStatus('', null);
 
   try {
-    const res = await fetch('http://localhost:3000/api/forgot-password/send-otp', {
+    const res = await fetch(buildApiUrl('/api/forgot-password/send-otp'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, role })
@@ -551,7 +553,7 @@ verifyResetCodeBtn?.addEventListener('click', async () => {
   setForgotStatus('', null);
 
   try {
-    const res = await fetch('http://localhost:3000/api/forgot-password/verify-otp', {
+    const res = await fetch(buildApiUrl('/api/forgot-password/verify-otp'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -615,7 +617,7 @@ forgotStepReset?.addEventListener('submit', async (event) => {
   setForgotStatus('', null);
 
   try {
-    const res = await fetch('http://localhost:3000/api/forgot-password/reset-password', {
+    const res = await fetch(buildApiUrl('/api/forgot-password/reset-password'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -668,7 +670,7 @@ studentForm?.addEventListener('submit', async (event) => {
   setSubmitState(studentForm, true, 'Signing In...');
 
   try {
-    const res = await fetch('http://localhost:3000/api/login/student', {
+    const res = await fetch(buildApiUrl('/api/login/student'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, accessCode })
@@ -684,7 +686,7 @@ studentForm?.addEventListener('submit', async (event) => {
 
     setAuthStatus(studentLoginStatus, 'Login successful. Opening your dashboard...', 'success');
 
-    fetch(`http://localhost:3000/api/student-profile?email=${encodeURIComponent(email)}`)
+    fetch(buildApiUrl(`/api/student-profile?email=${encodeURIComponent(email)}`))
       .then((res2) => res2.json())
       .then((profile) => {
         const resolvedStudentId = String(profile?.id || result?.student?.id || '');
@@ -754,7 +756,7 @@ instructorForm?.addEventListener('submit', async (event) => {
   setSubmitState(instructorForm, true, 'Signing In...');
 
   try {
-    const res = await fetch('http://localhost:3000/api/login/instructor', {
+    const res = await fetch(buildApiUrl('/api/login/instructor'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, accessCode })

@@ -116,11 +116,13 @@
   </div>
   <div class="drawer-overlay" id="profileOverlay"></div>
 
+  <script src="../js/app-config.js"></script>
   <script src="../js/theme_mode.js?v=20260331-theme-toggle"></script>
   <script src="../js/profile_drawer.js"></script>
   <script src="../js/account_actions.js"></script>
   <script>
-    const API_BASE = 'http://localhost:3000';
+    const API_BASE = window.SkillBoostApp?.apiBase || window.location.origin;
+    const buildApiUrl = window.SkillBoostApp?.buildApiUrl || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
     const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
     function normalizePhoto(value) {
       const raw = String(value || '').trim();
@@ -186,7 +188,7 @@
       const studentEmail = localStorage.getItem('studentEmail') || 'guest';
       try {
         // Only use the email, not email + id
-        const res = await fetch(`http://localhost:3000/api/course-views/${encodeURIComponent(studentEmail)}`);
+        const res = await fetch(buildApiUrl(`/api/course-views/${encodeURIComponent(studentEmail)}`));
         const viewed = await res.json();
         if (!Array.isArray(viewed) || viewed.length === 0) {
           historyGrid.innerHTML = '<div class="no-history-message">📚 No videos viewed yet. Start learning!</div>';

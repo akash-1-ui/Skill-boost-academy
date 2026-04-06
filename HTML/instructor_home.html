@@ -240,7 +240,7 @@
                 </div>
                 <div class="form-shell">
                     <div class="form-card">
-                        <form id="createCourseForm" class="dashboard-form" action="http://localhost:3000/courses" method="POST" enctype="multipart/form-data" onsubmit="return false;">
+                        <form id="createCourseForm" class="dashboard-form" action="#" method="POST" enctype="multipart/form-data" onsubmit="return false;">
                             <label for="title">Course Title</label>
                             <input type="text" id="title" name="title" required />
 
@@ -441,16 +441,18 @@
     </div>
     <div class="drawer-overlay" id="profileOverlay"></div>
 
+    <script src="../js/app-config.js"></script>
     <script src="../js/theme_mode.js?v=20260331-theme-toggle"></script>
     <script src="../js/profile_drawer.js"></script>
     <script src="../js/account_actions.js"></script>
     <script src="../js/addcourse.js"></script>
     <script>
+        const API_BASE = window.SkillBoostApp?.apiBase || window.location.origin;
+        const buildApiUrl = window.SkillBoostApp?.buildApiUrl || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
         const instructorId = localStorage.getItem('instructorId');
         const instructorName = localStorage.getItem('instructorName');
         const instructorPhoto = localStorage.getItem('instructorPhoto');
         const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
-        const API_BASE = 'http://localhost:3000';
         const INSTRUCTOR_ACCESS_POLL_MS = 10000;
         let instructorAccessPollHandle = null;
 
@@ -1103,7 +1105,7 @@
             renderCourseSkeletons();
             renderTopWatchedLoadingState();
             try {
-                const response = await fetch(`http://localhost:3000/api/instructor-dashboard/${instructorId}`);
+                const response = await fetch(buildApiUrl(`/api/instructor-dashboard/${instructorId}`));
                 const data = await response.json();
 
                 if (!response.ok) {
@@ -1166,7 +1168,7 @@
             }
 
             try {
-                const response = await fetch(`http://localhost:3000/api/courses/${courseId}`, {
+                const response = await fetch(buildApiUrl(`/api/courses/${courseId}`), {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1202,7 +1204,7 @@
             const editCourseId = asPositiveInt(getQueryParam('editCourseId'));
             if (!editCourseId) return;
             try {
-                const response = await fetch(`http://localhost:3000/api/course/${editCourseId}`);
+                const response = await fetch(buildApiUrl(`/api/course/${editCourseId}`));
                 if (!response.ok) {
                     throw new Error('Course not found');
                 }
@@ -1295,7 +1297,7 @@
                 if (!secondConfirm) return;
 
                 try {
-                    const response = await fetch('http://localhost:3000/api/terminate-instructor', {
+                    const response = await fetch(buildApiUrl('/api/terminate-instructor'), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ instructorId, instructorEmail: localStorage.getItem('instructorEmail') })

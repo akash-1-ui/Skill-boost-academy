@@ -5,6 +5,8 @@ const registrationStatus = document.getElementById('registrationStatus');
 
 const registrationQuery = new URLSearchParams(window.location.search);
 const presetAccessCode = normalizeAccessCode(registrationQuery.get('code'));
+const buildApiUrl = window.SkillBoostApp?.buildApiUrl
+  || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
 
 if (accessCodeInput && presetAccessCode) {
   accessCodeInput.value = presetAccessCode;
@@ -67,7 +69,7 @@ registerForm.addEventListener('submit', async (event) => {
   setSubmitState(submitButton, true, 'Registering...');
 
   try {
-    const res = await fetch('http://localhost:3000/api/register', {
+    const res = await fetch(buildApiUrl('/api/register'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, phone, course, password, accessCode })

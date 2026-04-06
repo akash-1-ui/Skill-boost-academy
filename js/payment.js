@@ -1,7 +1,7 @@
 const ACCESS_SESSION_STORAGE_KEY = 'skillboost-access-owner-session';
 const PAYMENT_PENDING_STORAGE_KEY = 'skillboost-payment-pending';
-const APP_ORIGIN = 'http://localhost:3000';
-const ACCESS_API_BASE = `${APP_ORIGIN}/api/access`;
+const ACCESS_API_BASE = window.SkillBoostApp?.buildApiUrl('/api/access')
+    || `${window.location.origin}/api/access`;
 
 const FALLBACK_PLAN_CATALOG = {
     1: {

@@ -24,13 +24,14 @@ const player = document.getElementById('coursePlayer');
 const currentVideoTitleEl = document.getElementById('currentVideoTitle');
 const watchStatusEl = document.getElementById('watchStatus');
 const placeholderEl = document.getElementById('playerPlaceholder');
+const API_BASE = window.SkillBoostApp?.apiBase || window.location.origin;
+const buildApiUrl = window.SkillBoostApp?.buildApiUrl
+  || ((path = '') => `${API_BASE}${String(path || '').startsWith('/') ? path : `/${path}`}`);
 
 let videos = [];
 let currentVideo = null;
 let watchTimer = null;
 let sessionSeconds = 0;
-
-const API_BASE = 'http://localhost:3000';
 
 function resolveAssetPath(rawPath, fallbackBase) {
   if (!rawPath) return '';
@@ -66,7 +67,7 @@ function resolveAssetPath(rawPath, fallbackBase) {
 
 async function loadCourseDetails() {
   try {
-    const response = await fetch(`http://localhost:3000/api/course/${courseId}`);
+    const response = await fetch(buildApiUrl(`/api/course/${courseId}`));
     if (!response.ok) {
       throw new Error('Course not found');
     }
@@ -98,7 +99,7 @@ async function loadCourseDetails() {
 async function loadVideos() {
   try {
     const query = studentEmail ? `?studentEmail=${encodeURIComponent(studentEmail)}` : '';
-    const response = await fetch(`http://localhost:3000/api/course-videos/${courseId}${query}`);
+    const response = await fetch(buildApiUrl(`/api/course-videos/${courseId}${query}`));
     if (!response.ok) {
       throw new Error('Failed to load videos');
     }
@@ -237,7 +238,7 @@ function updateLocalTimeSpent(seconds) {
 
 function sendCourseView(seconds) {
   if (!studentEmail) return;
-  fetch('http://localhost:3000/api/course-view', {
+  fetch(buildApiUrl('/api/course-view'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentEmail, courseId, timeSpent: Math.round(seconds) })
@@ -250,7 +251,7 @@ async function markWatched(video) {
   if (video.is_watched) return;
 
   try {
-    await fetch('http://localhost:3000/api/course-video-progress', {
+    await fetch(buildApiUrl('/api/course-video-progress'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -1,4 +1,7 @@
 (function () {
+  const buildApiUrl = window.SkillBoostApp?.buildApiUrl
+    || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
+
   const drawer = document.getElementById('profileDrawer');
   if (!drawer) return;
 
@@ -90,7 +93,7 @@
   async function refreshStudentProfile(email) {
     if (!email) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/student-profile?email=${encodeURIComponent(email)}`);
+      const res = await fetch(buildApiUrl(`/api/student-profile?email=${encodeURIComponent(email)}`));
       if (!res.ok) return;
       const profile = await res.json();
       const normalized = {
@@ -117,7 +120,7 @@
   async function refreshInstructorProfile(email) {
     if (!email) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/instructor-profile?email=${encodeURIComponent(email)}`);
+      const res = await fetch(buildApiUrl(`/api/instructor-profile?email=${encodeURIComponent(email)}`));
       if (!res.ok) return;
       const profile = await res.json();
       const normalized = {
@@ -197,7 +200,7 @@
           localStorage.setItem(`studentPhoto_${email}`, photo);
 
           if (photo.startsWith('data:image')) {
-            await fetch('http://localhost:3000/api/student-photo-base64', {
+            await fetch(buildApiUrl('/api/student-photo-base64'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ email, photo })
@@ -217,7 +220,7 @@
           localStorage.setItem('instructorPhoto', photo);
 
           if (email) {
-            await fetch('http://localhost:3000/api/instructor-profile', {
+            await fetch(buildApiUrl('/api/instructor-profile'), {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ email, name, expertise: extra })
@@ -225,7 +228,7 @@
           }
 
           if (photo.startsWith('data:image') && email) {
-            await fetch('http://localhost:3000/api/instructor-photo-base64', {
+            await fetch(buildApiUrl('/api/instructor-photo-base64'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ email, photo })

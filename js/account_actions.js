@@ -1,4 +1,7 @@
 (function () {
+  const buildApiUrl = window.SkillBoostApp?.buildApiUrl
+    || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
+
   function clearStudentStorage(email) {
     if (!email) return;
     localStorage.removeItem('studentEmail');
@@ -41,7 +44,7 @@
     }
 
     try {
-      const response = await fetch('http://localhost:3000/api/account/student', {
+      const response = await fetch(buildApiUrl('/api/account/student'), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -79,7 +82,7 @@
     }
 
     try {
-      const response = await fetch('http://localhost:3000/api/account/instructor', {
+      const response = await fetch(buildApiUrl('/api/account/instructor'), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instructorId, email })

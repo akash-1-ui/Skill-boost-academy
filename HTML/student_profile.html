@@ -54,7 +54,9 @@
   </div>
 </div>
 
+<script src="../js/app-config.js"></script>
 <script>
+  const buildApiUrl = window.SkillBoostApp?.buildApiUrl || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
   const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';
   function normalizePhoto(value) {
     const raw = String(value || '').trim();
@@ -107,7 +109,7 @@
 
     // Only send base64 image to backend
     if (profileImage && email && profileImage.startsWith('data:image')) {
-      fetch('http://localhost:3000/api/student-photo-base64', {
+      fetch(buildApiUrl('/api/student-photo-base64'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, photo: profileImage })

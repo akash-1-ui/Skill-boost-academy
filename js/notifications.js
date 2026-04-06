@@ -1,5 +1,5 @@
 // ============ CONFIGURATION ============
-const API_BASE = 'http://localhost:3000';
+const API_BASE = window.SkillBoostApp?.apiBase || window.location.origin;
 const POLLING_INTERVAL = 2000; // 2 seconds
 const STUDENT_NOTIFICATIONS_SEEN_PREFIX = 'studentNotificationsLastSeen_';
 

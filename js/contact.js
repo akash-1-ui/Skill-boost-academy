@@ -10,6 +10,8 @@ const CONTACT_RETURN_ROUTES = {
     navLabel: 'Back'
   }
 };
+const buildApiUrl = window.SkillBoostApp?.buildApiUrl
+  || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
 
 function configureContactReturnLinks() {
   const params = new URLSearchParams(window.location.search);
@@ -44,7 +46,7 @@ document.getElementById('contactForm').addEventListener('submit', async function
   const message = document.getElementById('message').value.trim();
 
   try {
-    const response = await fetch('http://localhost:3000/api/contact', {
+    const response = await fetch(buildApiUrl('/api/contact'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, message })

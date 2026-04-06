@@ -5,6 +5,8 @@ const instructorRegistrationStatus = document.getElementById('instructorRegistra
 
 const instructorRegistrationQuery = new URLSearchParams(window.location.search);
 const presetInstructorAccessCode = normalizeAccessCode(instructorRegistrationQuery.get('code'));
+const buildApiUrl = window.SkillBoostApp?.buildApiUrl
+  || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
 
 if (instructorAccessCodeInput && presetInstructorAccessCode) {
   instructorAccessCodeInput.value = presetInstructorAccessCode;
@@ -72,7 +74,7 @@ instructorRegistrationForm.addEventListener('submit', async (event) => {
   setInstructorSubmitState(submitButton, true, 'Registering...');
 
   try {
-    const response = await fetch('http://localhost:3000/api/register/instructor', {
+    const response = await fetch(buildApiUrl('/api/register/instructor'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

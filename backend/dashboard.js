@@ -1,7 +1,8 @@
 // Replace this with instructor's ID (from localStorage or backend)
 const instructorId = 1;
+const buildApiUrl = window.SkillBoostApp?.buildApiUrl || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
 
-fetch(`http://localhost:3000/api/courses/${instructorId}`)
+fetch(buildApiUrl(`/api/courses/${instructorId}`))
   .then(res => res.json())
   .then(courses => {
     const tbody = document.querySelector('.course-table tbody');

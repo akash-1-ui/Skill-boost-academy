@@ -27,6 +27,9 @@ function initAddCoursePage() {
   const MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024;
   const UPLOAD_STATE_STORAGE_KEY = 'skillboost:video-upload-state';
   const UPLOAD_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+  const API_BASE = window.SkillBoostApp?.apiBase || window.location.origin;
+  const buildApiUrl = window.SkillBoostApp?.buildApiUrl
+    || ((path = '') => `${API_BASE}${String(path || '').startsWith('/') ? path : `/${path}`}`);
 
   const instructorId = localStorage.getItem('instructorId');
   if (!instructorId) {
@@ -378,7 +381,7 @@ function initAddCoursePage() {
   }
 
   function buildNetworkFailureReason(actionLabel) {
-    return `Unable to ${actionLabel} because the backend server could not be reached. Please make sure the server is running on http://localhost:3000.`;
+    return `Unable to ${actionLabel} because the backend server could not be reached. Please make sure the backend server is available.`;
   }
 
   async function verifyUploadedVideo(courseId, uploadedVideoId) {
@@ -386,7 +389,7 @@ function initAddCoursePage() {
       return { verified: false, totalVideos: 0 };
     }
 
-    const response = await fetch(`http://localhost:3000/api/course-videos/${courseId}`);
+    const response = await fetch(buildApiUrl(`/api/course-videos/${courseId}`));
     const data = await readApiPayload(response);
 
     if (!response.ok) {
@@ -425,7 +428,7 @@ function initAddCoursePage() {
     if (!courseSelect) return;
     courseSelect.innerHTML = '<option value="">Loading courses...</option>';
     try {
-      const response = await fetch(`http://localhost:3000/api/courses/${instructorId}`);
+      const response = await fetch(buildApiUrl(`/api/courses/${instructorId}`));
       const data = await readApiPayload(response);
       const courses = Array.isArray(data) ? data : [];
       if (courses.length === 0) {
@@ -510,11 +513,11 @@ function initAddCoursePage() {
         formData.set('duration_days', selectedDuration.value);
 
         const response = isEditing
-          ? await fetch(`http://localhost:3000/api/courses/${editingCourseId}`, {
+          ? await fetch(buildApiUrl(`/api/courses/${editingCourseId}`), {
               method: 'PUT',
               body: formData
             })
-          : await fetch('http://localhost:3000/courses', {
+          : await fetch(buildApiUrl('/courses'), {
               method: 'POST',
               body: formData
             });
@@ -766,10 +769,10 @@ function initAddCoursePage() {
           reject(new Error(didTimeout ? `Upload timed out after ${UPLOAD_TIMEOUT_MS / 1000} seconds` : 'Upload aborted'));
         });
 
-        xhr.open('POST', 'http://localhost:3000/videos/upload');
+        xhr.open('POST', buildApiUrl('/videos/upload'));
         xhr.setRequestHeader('Accept', 'application/json');
         armUploadTimeout();
-        console.log('Sending video upload request to http://localhost:3000/videos/upload');
+        console.log('Sending video upload request to', buildApiUrl('/videos/upload'));
         xhr.send(formData);
       });
 

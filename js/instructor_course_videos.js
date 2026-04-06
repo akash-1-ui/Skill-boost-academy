@@ -40,8 +40,9 @@ const editModalCancel = document.getElementById('cancelEditVideo');
 const editForm = document.getElementById('videoEditForm');
 const editTitleInput = document.getElementById('editVideoTitle');
 const editFileInput = document.getElementById('editVideoFile');
-
-const API_BASE = 'http://localhost:3000';
+const API_BASE = window.SkillBoostApp?.apiBase || window.location.origin;
+const buildApiUrl = window.SkillBoostApp?.buildApiUrl
+  || ((path = '') => `${API_BASE}${String(path || '').startsWith('/') ? path : `/${path}`}`);
 
 let videos = [];
 let currentVideo = null;
@@ -172,7 +173,7 @@ function renderPlaylist() {
 
 async function loadCourseDetails() {
   try {
-    const response = await fetch(`${API_BASE}/api/course/${courseId}`);
+    const response = await fetch(buildApiUrl(`/api/course/${courseId}`));
     if (!response.ok) {
       throw new Error('Course not found');
     }
@@ -214,7 +215,7 @@ async function loadCourseDetails() {
 
 async function loadVideos(selectedId) {
   try {
-    const response = await fetch(`${API_BASE}/api/course-videos/${courseId}`);
+    const response = await fetch(buildApiUrl(`/api/course-videos/${courseId}`));
     if (!response.ok) {
       throw new Error('Failed to load videos');
     }
@@ -280,7 +281,7 @@ async function updateVideo() {
 
   try {
     const response = hasNewFile
-      ? await fetch(`${API_BASE}/api/course-videos/${currentVideo.id}`, {
+      ? await fetch(buildApiUrl(`/api/course-videos/${currentVideo.id}`), {
           method: 'PUT',
           body: (() => {
             const formData = new FormData();
@@ -290,7 +291,7 @@ async function updateVideo() {
             return formData;
           })()
         })
-      : await fetch(`${API_BASE}/api/course-videos/${currentVideo.id}`, {
+      : await fetch(buildApiUrl(`/api/course-videos/${currentVideo.id}`), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -324,7 +325,7 @@ async function deleteVideo() {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/api/course-videos/${currentVideo.id}?instructorId=${encodeURIComponent(instructorId)}`,
+    const response = await fetch(buildApiUrl(`/api/course-videos/${currentVideo.id}?instructorId=${encodeURIComponent(instructorId)}`),
       { method: 'DELETE' }
     );
 
@@ -352,7 +353,7 @@ async function deleteCourse() {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/api/courses/${courseId}`, {
+    const response = await fetch(buildApiUrl(`/api/courses/${courseId}`), {
       method: 'DELETE'
     });
 
