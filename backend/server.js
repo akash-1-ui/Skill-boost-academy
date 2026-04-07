@@ -3654,63 +3654,56 @@ app.post('/api/terminate-instructor', async (req, res) => {
     }
 
     try {
-        // Start transaction for atomic deletion
-        const connection = await db.getConnection();
-        await connection.beginTransaction();
+        // Get all courses for this instructor
+        const [courses] = await db.query(
+            'SELECT id FROM courses WHERE instructor_id = ?',
+            [instructorId]
+        );
 
-        try {
-            // Get all courses for this instructor
-            const [courses] = await connection.query(
-                'SELECT id FROM courses WHERE instructor_id = ?',
-                [instructorId]
+        // Delete videos for all courses
+        for (const course of courses) {
+            await db.query(
+                'DELETE FROM course_videos WHERE course_id = ?',
+                [course.id]
             );
-
-            // Delete videos for all courses
-            for (const course of courses) {
-                await connection.query(
-                    'DELETE FROM course_videos WHERE course_id = ?',
-                    [course.id]
-                );
-            }
-
-            // Delete enrollments for all courses
-            for (const course of courses) {
-                await connection.query(
-                    'DELETE FROM enrollments WHERE course_id = ?',
-                    [course.id]
-                );
-            }
-
-            // Delete courses
-            await connection.query(
-                'DELETE FROM courses WHERE instructor_id = ?',
-                [instructorId]
-            );
-
-            // Delete messages sent by this instructor
-            await connection.query(
-                'DELETE FROM messages WHERE instructor_id = ?',
-                [instructorId]
-            );
-
-            // Delete instructor
-            await connection.query(
-                'DELETE FROM instructors WHERE id = ?',
-                [instructorId]
-            );
-
-            await connection.commit();
-            connection.release();
-
-            return res.json({ message: 'Account terminated successfully' });
-        } catch (error) {
-            await connection.rollback();
-            connection.release();
-            throw error;
         }
+
+        // Delete enrollments for all courses
+        for (const course of courses) {
+            await db.query(
+                'DELETE FROM enrollments WHERE course_id = ?',
+                [course.id]
+            );
+        }
+
+        // Delete courses
+        await db.query(
+            'DELETE FROM courses WHERE instructor_id = ?',
+            [instructorId]
+        );
+
+        // Delete messages sent by this instructor
+        await db.query(
+            'DELETE FROM messages WHERE instructor_id = ?',
+            [instructorId]
+        );
+
+        // Delete instructor
+        await db.query(
+            'DELETE FROM instructors WHERE id = ?',
+            [instructorId]
+        );
+
+        // Delete user account
+        await db.query(
+            'DELETE FROM users WHERE id = ? AND email = ?',
+            [instructorId, instructorEmail]
+        );
+
+        return res.json({ message: 'Account terminated successfully' });
     } catch (error) {
         console.error('Terminate instructor error:', error);
-        return res.status(500).json({ error: 'Failed to terminate account' });
+        return res.status(500).json({ error: 'Failed to terminate account', details: error.message });
     }
 });
 
