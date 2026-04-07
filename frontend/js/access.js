@@ -505,7 +505,7 @@ function renderDashboard(payload) {
     });
     renderMonitoring(payload.monitoring || {});
     console.log('[DEBUG] About to call renderPlans with', payload.plans?.length, 'plans and currentPlanId:', currentPlan.id);
-    renderPlans(payload.plans || [], currentPlan.id);
+    renderPlans(payload.plans || [], currentPlan);
     renderPayments(payload.payments || []);
 
     const sessionBadge = document.getElementById('sessionBadge');
@@ -684,10 +684,11 @@ function clearDuplicateUsageNotice(warnings) {
     }
 }
 
-function renderPlans(plans, currentPlanId) {
+function renderPlans(plans, currentPlan) {
     const plansGrid = document.getElementById('plansGrid');
+    const currentPlanId = Number(currentPlan?.id || 0);
 
-    console.log('[DEBUG] renderPlans called with plans:', plans, 'currentPlanId:', currentPlanId);
+    console.log('[DEBUG] renderPlans called with plans:', plans, 'currentPlan:', currentPlan);
     console.log('[DEBUG] plansGrid element:', plansGrid);
 
     if (!plans.length) {
@@ -714,9 +715,10 @@ function renderPlans(plans, currentPlanId) {
     });
 
     const html = displayPlans.map((plan) => {
-        const isCurrent = Number(plan.id) === Number(currentPlanId);
+        const isCurrent = Number(plan.id) === currentPlanId;
         const cardClass = `plan-option${isCurrent ? ' current' : ''}`;
         const isFree = Number(plan.price) === 0;
+        const isBasicPlan = String(plan.name || '').trim().toLowerCase() === 'basic';
         const activationMode = String(plan.activation_mode || (isFree ? 'free' : 'purchase')).trim().toLowerCase();
         const isReactivation = activationMode === 'reactivate';
         const actionLabel = isCurrent
@@ -728,6 +730,17 @@ function renderPlans(plans, currentPlanId) {
         const noRepayNote = isReactivation
             ? '<span>Previously purchased for this academy. No extra payment required.</span>'
             : '';
+        
+        // Calculate days remaining for paid plans only (not basic, not free)
+        let expiryNote = '';
+        if (isCurrent && !isBasicPlan && !isFree && currentPlan?.days_remaining !== null && currentPlan?.days_remaining !== undefined) {
+            const daysLeft = Number(currentPlan.days_remaining || 0);
+            if (daysLeft > 0) {
+                expiryNote = `<small class="plan-expiry-text">${daysLeft} day${daysLeft !== 1 ? 's' : ''} left to expire plan</small>`;
+            } else if (daysLeft === 0) {
+                expiryNote = '<small class="plan-expiry-text">Expires today</small>';
+            }
+        }
 
         return `
             <article class="${cardClass}">
@@ -741,6 +754,7 @@ function renderPlans(plans, currentPlanId) {
                     <span>${Number(plan.max_students || 0)} student seats</span>
                     <span>${escapeHtml(plan.description || 'Plan details available after selection.')}</span>
                     ${noRepayNote}
+                    ${expiryNote}
                 </div>
                 <button
                     type="button"

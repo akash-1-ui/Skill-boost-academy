@@ -2674,6 +2674,14 @@ td {
     font-weight: 700;
 }
 
+.plan-expiry-text {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--accent-strong);
+    font-weight: 600;
+    margin-top: var(--space-xs);
+}
+
 /* Toast */
 .toast {
     position: fixed;

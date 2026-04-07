@@ -4023,6 +4023,8 @@ async function initializeAccessTables() {
 
         await ensureColumnExists('customers', 'password_hash', 'password_hash VARCHAR(255) NULL AFTER phone');
         await ensureColumnExists('academies', 'status', `status VARCHAR(50) DEFAULT 'active' AFTER access_code`);
+        await ensureColumnExists('academies', 'plan_activated_at', 'plan_activated_at TIMESTAMP NULL AFTER plan_id');
+        await ensureColumnExists('academies', 'plan_expires_at', 'plan_expires_at TIMESTAMP NULL AFTER plan_activated_at');
         await ensureColumnExists('users', 'academy_id', 'academy_id VARCHAR(36) NULL AFTER profile_photo');
         await ensureColumnExists('users', 'academy_access_status', `academy_access_status VARCHAR(20) NOT NULL DEFAULT 'active' AFTER academy_id`);
         await ensureColumnExists('users', 'academy_access_last_login_at', 'academy_access_last_login_at DATETIME NULL AFTER academy_access_status');
@@ -4225,6 +4227,14 @@ function buildAccessUsageMetric(label, current, limit) {
 }
 
 function buildAccessOwnerSummary(req, context) {
+    const planExpiresAt = context.plan_expires_at ? new Date(context.plan_expires_at) : null;
+    const now = new Date();
+    let daysRemaining = null;
+    
+    if (planExpiresAt && planExpiresAt > now) {
+        daysRemaining = Math.ceil((planExpiresAt - now) / (1000 * 60 * 60 * 24));
+    }
+    
     return {
         customer: {
             id: Number(context.customer_id),
@@ -4247,7 +4257,10 @@ function buildAccessOwnerSummary(req, context) {
             price: Number(context.plan_price || 0),
             max_instructors: Number(context.max_instructors || 0),
             max_students: Number(context.max_students || 0),
-            description: context.plan_description || ''
+            description: context.plan_description || '',
+            activated_at: context.plan_activated_at || null,
+            expires_at: context.plan_expires_at || null,
+            days_remaining: daysRemaining
         },
         invite_links: buildAccessInviteLinks(req, context.access_code)
     };
@@ -4275,6 +4288,8 @@ async function getAccessOwnerContext(customerId, academyId = null, connection = 
             a.access_code,
             a.status AS academy_status,
             a.plan_id,
+            a.plan_activated_at,
+            a.plan_expires_at,
             a.created_at AS academy_created_at,
             a.updated_at AS academy_updated_at,
             p.name AS plan_name,
@@ -5412,10 +5427,14 @@ app.post('/api/access/subscription', accessOwnerAuth, async (req, res) => {
 
         await connection.query(
             `UPDATE academies
-             SET plan_id = ?, status = 'active', updated_at = NOW()
+             SET plan_id = ?, 
+                 status = 'active', 
+                 plan_activated_at = NOW(),
+                 plan_expires_at = IF(? > 0, DATE_ADD(NOW(), INTERVAL 31 DAY), NULL),
+                 updated_at = NOW()
              WHERE id = ?
                AND customer_id = ?`,
-            [plan.id, req.accessOwner.academy_id, req.accessOwner.customer_id]
+            [plan.id, Number(plan.price || 0), req.accessOwner.academy_id, req.accessOwner.customer_id]
         );
 
         let paymentReference = reusablePayment?.payment_reference || null;
