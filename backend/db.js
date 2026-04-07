@@ -4,12 +4,15 @@ const databaseName = process.env.DB_NAME || 'course_registration';
 
 const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 3306,
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '@inspiron16H',
     database: databaseName,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    connectTimeout: 20000,
+    enableKeepAlive: true
 });
 
 // Test database connection

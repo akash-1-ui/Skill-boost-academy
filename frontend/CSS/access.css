@@ -1772,6 +1772,60 @@ input {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
+select {
+    width: 100%;
+    padding: var(--space-md);
+    border: 1px solid rgba(37, 99, 235, 0.16);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.96) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%232563eb" width="20" height="20"><path d="M7 10l5 5 5-5z"/></svg>') no-repeat right 8px center;
+    background-size: 20px;
+    padding-right: 36px;
+    color: var(--ink);
+    font-size: var(--text-sm);
+    line-height: var(--lh-normal);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    cursor: pointer;
+    appearance: none;
+    font-family: inherit;
+}
+
+select:hover:not(:disabled) {
+    border-color: rgba(37, 99, 235, 0.32);
+}
+
+select:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+    transform: translateY(-1px);
+}
+
+select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+select option {
+    background: white;
+    color: var(--ink);
+    padding: var(--space-md);
+}
+
+select option:hover {
+    background: rgba(37, 99, 235, 0.1);
+}
+
+html[data-theme="dark"] select {
+    background: rgba(10, 22, 43, 0.88) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2360a5fa" width="20" height="20"><path d="M7 10l5 5 5-5z"/></svg>') no-repeat right 8px center;
+    background-size: 20px;
+    padding-right: 36px;
+}
+
+html[data-theme="dark"] select option {
+    background: #10203a;
+    color: #e7f0ff;
+}
+
 input:focus-visible {
     outline: none;
     border-color: var(--accent);
