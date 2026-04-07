@@ -2,7 +2,7 @@
   const LOCAL_BACKEND_ORIGIN = 'http://localhost:3000';
   // Set this once after your Render backend is live, for example:
   // const DEPLOYED_BACKEND_ORIGIN = 'https://your-service.onrender.com';
-  const DEPLOYED_BACKEND_ORIGIN = '';
+  const DEPLOYED_BACKEND_ORIGIN = 'https://skill-boost-nexus.onrender.com';
   const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
   function normalizeOrigin(value) {
