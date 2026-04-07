@@ -3654,6 +3654,18 @@ app.post('/api/terminate-instructor', async (req, res) => {
     }
 
     try {
+        // Get the user_id linked to this instructor
+        const [instructorRows] = await db.query(
+            'SELECT user_id FROM instructors WHERE id = ?',
+            [instructorId]
+        );
+
+        if (instructorRows.length === 0) {
+            return res.status(404).json({ error: 'Instructor not found' });
+        }
+
+        const userId = instructorRows[0].user_id;
+
         // Get all courses for this instructor
         const [courses] = await db.query(
             'SELECT id FROM courses WHERE instructor_id = ?',
@@ -3694,13 +3706,15 @@ app.post('/api/terminate-instructor', async (req, res) => {
             [instructorId]
         );
 
-        // Delete user account
-        await db.query(
-            'DELETE FROM users WHERE id = ? AND email = ?',
-            [instructorId, instructorEmail]
-        );
+        // Delete user account (if user_id exists)
+        if (userId) {
+            await db.query(
+                'DELETE FROM users WHERE id = ?',
+                [userId]
+            );
+        }
 
-        return res.json({ message: 'Account terminated successfully' });
+        return res.json({ success: true, message: 'Account terminated successfully' });
     } catch (error) {
         console.error('Terminate instructor error:', error);
         return res.status(500).json({ error: 'Failed to terminate account', details: error.message });
