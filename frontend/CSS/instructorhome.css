@@ -256,7 +256,7 @@ select:focus-visible {
 .profile-form .save-btn:hover,
 .profile-icon-btn:hover,
 .course-btn:hover {
-  transform: translateY(-0.125rem);
+  transform: translateY(-0.2rem) scale(1.02);
 }
 
 .main-content {
@@ -297,11 +297,15 @@ select:focus-visible {
 .insights-section,
 .courses-section {
   border-radius: var(--radius-xl);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(125, 211, 252, 0.18);
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)),
-    rgba(8, 13, 34, 0.68);
-  box-shadow: var(--shadow);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.12), transparent 50%),
+    linear-gradient(180deg, rgba(8, 13, 34, 0.88) 0%, rgba(8, 13, 34, 0.82) 100%);
+  box-shadow: 
+    0 1.4rem 3.6rem rgba(3, 7, 18, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 2rem rgba(56, 189, 248, 0.04);
   backdrop-filter: var(--backdrop);
 }
 
@@ -509,9 +513,16 @@ select:focus-visible {
 .ghost-btn,
 .course-btn.view,
 .course-btn.edit {
-  background: rgba(255, 255, 255, 0.08);
+  background: 
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 70%),
+    rgba(8, 13, 34, 0.52);
   color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  box-shadow: 
+    0 0.6rem 1.6rem rgba(3, 7, 18, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .dashboard-form button,
@@ -520,14 +531,27 @@ select:focus-visible {
 .course-btn.manage {
   color: #fff;
   border: none;
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.98), rgba(139, 92, 246, 0.96));
-  box-shadow: 0 1rem 2rem rgba(56, 189, 248, 0.16);
+  background: 
+    linear-gradient(135deg, rgba(56, 189, 248, 0.98), rgba(139, 92, 246, 0.96)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.2), transparent 70%);
+  box-shadow: 
+    0 1.2rem 2.8rem rgba(56, 189, 248, 0.2),
+    0 0 2rem rgba(56, 189, 248, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, background 0.3s ease;
 }
 
 .course-btn.delete {
   color: #fff;
   border: none;
-  background: linear-gradient(135deg, rgba(251, 113, 133, 0.96), rgba(239, 68, 68, 0.92));
+  background: 
+    linear-gradient(135deg, rgba(251, 113, 133, 0.96), rgba(239, 68, 68, 0.92)),
+    radial-gradient(circle at 100% 0%, rgba(251, 113, 133, 0.18), transparent 70%);
+  box-shadow: 
+    0 1.2rem 2.8rem rgba(251, 113, 133, 0.18),
+    0 0 1.6rem rgba(251, 113, 133, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, background 0.3s ease;
 }
 
 .dashboard-stats {
@@ -543,11 +567,15 @@ select:focus-visible {
 .form-card,
 .course-card {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
-    rgba(8, 13, 34, 0.76);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(1.125rem);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 50%),
+    linear-gradient(180deg, rgba(8, 13, 34, 0.82) 0%, rgba(8, 13, 34, 0.74) 100%);
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  box-shadow: 
+    0 1.2rem 3.2rem rgba(3, 7, 18, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(1.25rem);
 }
 
 .stat-card {
@@ -565,7 +593,7 @@ select:focus-visible {
   flex-direction: column;
   gap: 0.95rem;
   justify-content: space-between;
-  transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease;
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.32s ease, box-shadow 0.32s ease, background 0.32s ease;
 }
 
 .stat-card::before {
@@ -591,9 +619,12 @@ select:focus-visible {
 }
 
 .stat-card:hover {
-  transform: translateY(-0.18rem);
+  transform: translateY(-0.32rem) scale(1.02);
   border-color: var(--stat-outline);
-  box-shadow: 0 1.2rem 2.8rem rgba(3, 7, 18, 0.24);
+  box-shadow: 
+    0 1.6rem 4rem rgba(3, 7, 18, 0.28),
+    0 0 2rem var(--stat-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .stat-card-courses {
@@ -654,17 +685,22 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.42rem 0.62rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 999px;
   border: 1px solid var(--stat-outline);
-  background: var(--stat-chip-bg);
+  background: 
+    linear-gradient(135deg, var(--stat-chip-bg) 0%, rgba(255, 255, 255, 0.04) 100%),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.06), transparent 70%);
   color: var(--stat-chip-text);
   font-size: 0.64rem;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   white-space: nowrap;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0.3rem 0.8rem rgba(0, 0, 0, 0.1);
+  transition: all 0.24s ease;
 }
 
 .stat-card-value-row {
@@ -832,12 +868,18 @@ select:focus-visible {
 .insight-card {
   padding: clamp(1.15rem, 1.5vw, 1.35rem);
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(125, 211, 252, 0.12);
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(56, 189, 248, 0.06));
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  background: 
+    linear-gradient(135deg, rgba(139, 92, 246, 0.16), rgba(56, 189, 248, 0.12)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.1), transparent 60%),
+    linear-gradient(180deg, rgba(8, 13, 34, 0.72), rgba(8, 13, 34, 0.66));
   min-block-size: 0;
   position: relative;
   overflow: hidden;
-  transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease, background 0.28s ease;
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.32s ease, box-shadow 0.32s ease, background 0.32s ease;
+  box-shadow: 
+    0 0.8rem 2rem rgba(139, 92, 246, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .insight-card::after {
@@ -846,10 +888,16 @@ select:focus-visible {
   inset: auto -2rem -2.6rem auto;
   inline-size: 6.5rem;
   block-size: 6.5rem;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.12), transparent 70%);
-  pointer-events: none;
-}
+  border-radius: 50%;32rem) scale(1.02);
+  border-color: rgba(139, 92, 246, 0.38);
+  background: 
+    linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(56, 189, 248, 0.16)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.14), transparent 60%),
+    linear-gradient(180deg, rgba(8, 13, 34, 0.78), rgba(8, 13, 34, 0.72));
+  box-shadow: 
+    0 1.6rem 3.8rem rgba(139, 92, 246, 0.18),
+    0 0 2rem rgba(139, 92, 246, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12
 
 .insight-card:hover {
   transform: translateY(-0.24rem);
@@ -880,22 +928,34 @@ select:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  padding: 0.45rem 0.75rem;
+  padding: 0.52rem 0.85rem;
   border-radius: 999px;
-  border: 1px solid rgba(139, 92, 246, 0.24);
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(56, 189, 248, 0.08));
+  border: 1px solid rgba(139, 92, 246, 0.32);
+  background: 
+    linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(56, 189, 248, 0.14)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 70%);
   color: var(--accent-2);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   white-space: nowrap;
-  transition: all 0.2s ease;
+  transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 
+    0 0.4rem 1rem rgba(139, 92, 246, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .insight-pill:hover {
-  border-color: rgba(139, 92, 246, 0.4);
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(56, 189, 248, 0.12));
+  border-color: rgba(139, 92, 246, 0.6);
+  background: 
+    linear-gradient(135deg, rgba(139, 92, 246, 0.28), rgba(56, 189, 248, 0.22)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.12), transparent 70%);
+  transform: translateY(-0.12rem);
+  box-shadow: 
+    0 0.6rem 1.4rem rgba(139, 92, 246, 0.14),
+    0 0 1.2rem rgba(139, 92, 246, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .insight-value {
@@ -918,9 +978,14 @@ select:focus-visible {
 .table-shell {
   border-radius: calc(var(--radius-lg) - 0.1rem);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  background: 
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 50%),
+    rgba(8, 13, 34, 0.62);
+  box-shadow: 
+    0 0.8rem 2rem rgba(3, 7, 18, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .dashboard-section {
@@ -966,6 +1031,15 @@ select:focus-visible {
 .form-card {
   border-radius: var(--radius-lg);
   padding: var(--card-pad);
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 50%),
+    linear-gradient(180deg, rgba(8, 13, 34, 0.82) 0%, rgba(8, 13, 34, 0.74) 100%);
+  box-shadow: 
+    0 1.2rem 3.2rem rgba(3, 7, 18, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12);
 }
 
 .link-btn {
@@ -1008,15 +1082,17 @@ select:focus-visible {
 
 .duration-selector label {
   margin: 0;
-  padding: 0.95rem;
+  padding: 1rem 1.05rem;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  background: 
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(8, 13, 34, 0.52);
   color: var(--text);
   cursor: pointer;
   display: grid;
   gap: 0.35rem;
-  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.28s ease, box-shadow 0.28s ease, background 0.28s ease;
 }
 
 .duration-selector label span {
@@ -1027,10 +1103,21 @@ select:focus-visible {
   color: var(--muted-strong);
   font-size: 0.82rem;
 }
-
-.duration-selector label:hover {
-  transform: translateY(-0.12rem);
-  border-color: rgba(103, 232, 249, 0.24);
+6rem);
+  border-color: rgba(139, 92, 246, 0.32);
+  box-shadow: 
+    0 1.2rem 2.4rem rgba(139, 92, 246, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: 
+    linear-gradient(1439, 92, 246, 0.5);
+  background: 
+    linear-gradient(145deg, rgba(56, 189, 248, 0.22), rgba(139, 92, 246, 0.2)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.12), transparent 60%),
+    linear-gradient(180deg, rgba(8, 13, 34, 0.68), rgba(8, 13, 34, 0.62));
+  box-shadow: 
+    0 1.2rem 2.8rem rgba(139, 92, 246, 0.16),
+    0 0 1.6rem rgba(139, 92, 246, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1
   box-shadow: 0 1rem 2rem rgba(3, 7, 18, 0.18);
 }
 
@@ -1052,11 +1139,14 @@ select:focus-visible {
 .dashboard-form textarea,
 .profile-form input {
   inline-size: 100%;
-  padding: 0.8rem 0.95rem;
+  padding: 0.9rem 1rem;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  background: 
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(8, 13, 34, 0.52);
   color: var(--text);
+  transition: border-color 0.28s ease, box-shadow 0.28s ease, background 0.28s ease;
 }
 
 .dashboard-form textarea {
@@ -1069,8 +1159,13 @@ select:focus-visible {
 .dashboard-form textarea:focus,
 .profile-form input:focus {
   outline: none;
-  border-color: rgba(103, 232, 249, 0.38);
-  box-shadow: 0 0 0 0.25rem rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.48);
+  box-shadow: 
+    0 0 0 0.35rem rgba(56, 189, 248, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: 
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    rgba(8, 13, 34, 0.58);
 }
 
 .dashboard-form option {
@@ -1091,10 +1186,22 @@ select:focus-visible {
 .course-card {
   border-radius: var(--radius-lg);
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-block-size: 100%;
-  cursor: pointer;
+  display: flex;6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.36s ease, border-color 0.36s ease, background 0.36s ease;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 50%),
+    linear-gradient(180deg, rgba(8, 13, 34, 0.82) 0%, rgba(8, 13, 34, 0.74) 100%);
+  box-shadow: 
+    0 1.2rem 3.2rem rgba(3, 7, 18, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08)
+  flex-direction: column;4rem) scale(1.03);
+  box-shadow: 
+    0 1.8rem 4.2rem rgba(56, 189, 248, 0.18),
+    0 0.8rem 2.4rem rgba(3, 7, 18, 0.28),
+    0 0 2rem rgba(56, 189, 248, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  border-color: rgba(139, 92, 246, 0.32
   min-inline-size: 0;
   position: relative;
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
@@ -1120,7 +1227,10 @@ select:focus-visible {
   inline-size: 100%;
   block-size: var(--cover-height);
   overflow: hidden;
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(139, 92, 246, 0.22));
+  background: 
+    linear-gradient(135deg, rgba(56, 189, 248, 0.3), rgba(139, 92, 246, 0.28)),
+    radial-gradient(circle at center, rgba(56, 189, 248, 0.2), transparent 70%);
+  position: relative;
 }
 
 .course-cover img {
