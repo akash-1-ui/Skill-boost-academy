@@ -125,90 +125,42 @@
                     </article>
                 </div>
 
-                <section class="courses-section analytics-section dashboard-switcher-section">
+                <section class="courses-section analytics-section">
                     <div class="analytics-header">
                         <div class="analytics-header-content">
                             <div>
                                 <p class="section-kicker">Performance Analytics</p>
-                                <h3 class="analytics-title">Track Your Impact</h3>
+                                <h3 class="analytics-title">Course Insights</h3>
                             </div>
-                         
                         </div>
-                        <div class="dashboard-switcher-tabs" role="tablist" aria-label="Dashboard analytics views">
-                            <button
-                                type="button"
-                                class="dashboard-tab is-active"
-                                id="dashboardTabInsights"
-                                data-dashboard-tab="insights"
-                                role="tab"
-                                aria-selected="true"
-                                aria-controls="dashboardPanelInsights"
-                            >
-                                <span class="tab-icon">📊</span>
-                                Performance Insights
-                            </button>
-                            <button
-                                type="button"
-                                class="dashboard-tab"
-                                id="dashboardTabWatch"
-                                data-dashboard-tab="watch"
-                                role="tab"
-                                aria-selected="false"
-                                aria-controls="dashboardPanelWatch"
-                            >
-                                <span class="tab-icon">🎬</span>
-                                Top Watched Courses
-                            </button>
+                        <button type="button" class="insights-toggle-btn" id="insightsToggleBtn" aria-label="Toggle course insights details" aria-expanded="false">
+                            <span class="toggle-text" data-expanded="COMPACT" data-collapsed="EXPAND">EXPAND</span>
+                            <span class="toggle-icon">▼</span>
+                        </button>
+                    </div>
+
+                    <div class="insights-collapsible-content collapsed" id="insightsCollapsibleContent">
+                        <div class="analytics-filter-section">
+                        <div class="filter-controls">
+                            <label for="courseFilterSelect">Filter:</label>
+                            <select id="courseFilterSelect" class="filter-select" aria-label="Filter courses">
+                                <option value="all">All Courses</option>
+                            </select>
                         </div>
                     </div>
 
-                    <div
-                        class="dashboard-tab-panel is-active"
-                        id="dashboardPanelInsights"
-                        data-dashboard-panel="insights"
-                        role="tabpanel"
-                        aria-labelledby="dashboardTabInsights"
-                    >
-                        <div class="insight-grid">
-                            <article class="insight-card">
-                                <div class="insight-card-header">
-                                    <h4>Top Performing Course</h4>
-                                    <span class="insight-pill">🏆 Highest Demand</span>
-                                </div>
-                                <p class="insight-value" id="topCourseName">No courses yet</p>
-                                <p class="insight-meta">Based on current learner enrollments.</p>
-                            </article>
-                            <article class="insight-card">
-                                <div class="insight-card-header">
-                                    <h4>Latest Release</h4>
-                                    <span class="insight-pill">✨ Recent</span>
-                                </div>
-                                <p class="insight-value" id="latestUpload">No uploads yet</p>
-                                <p class="insight-meta">Most recently published course or update.</p>
-                            </article>
-                        </div>
+                    <div class="course-insights-list-header">
+                        <div class="insights-header-cell insights-header-title">Course</div>
+                        <div class="insights-header-cell">Views</div>
+                        <div class="insights-header-cell">Watch Time</div>
+                        <div class="insights-header-cell">Upload Date</div>
                     </div>
 
-                    <div
-                        class="dashboard-tab-panel"
-                        id="dashboardPanelWatch"
-                        data-dashboard-panel="watch"
-                        role="tabpanel"
-                        aria-labelledby="dashboardTabWatch"
-                        hidden
-                    >
-                        <div class="table-shell">
-                            <table class="course-table top-watched-table" id="topWatchedTable">
-                                <thead>
-                                    <tr>
-                                        <th class="col-course">Course Title</th>
-                                        <th class="col-hours">Watch Hours</th>
-                                        <th class="col-records">Watch Records</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
+                    <div class="course-insights-container">
+                        <div class="course-insights-grid" id="courseInsightsGrid" aria-live="polite" aria-busy="true">
+                            <!-- Course insight list items will be rendered here -->
                         </div>
+                    </div>
                     </div>
                 </section>
 
@@ -621,45 +573,113 @@
         const initialView = location.hash ? location.hash.replace('#', '') : 'dashboard';
         setActiveView(initialView || 'dashboard', { syncHash: false, scroll: false });
 
-        const dashboardTabs = Array.from(document.querySelectorAll('[data-dashboard-tab]'));
-        const dashboardPanels = Array.from(document.querySelectorAll('[data-dashboard-panel]'));
+        // Course Insights Filter and Display
+        let allCoursesData = [];
 
-        function setActiveDashboardTab(tabId) {
-            const activeTab = dashboardTabs.find((tab) => tab.dataset.dashboardTab === tabId) || dashboardTabs[0];
-            const activePanelId = activeTab?.dataset.dashboardTab;
+        function renderCourseInsights(courses, filterType = 'all') {
+            const grid = document.getElementById('courseInsightsGrid');
+            if (!grid) return;
 
-            dashboardTabs.forEach((tab) => {
-                const isActive = tab === activeTab;
-                tab.classList.toggle('is-active', isActive);
-                tab.setAttribute('aria-selected', String(isActive));
-                tab.tabIndex = isActive ? 0 : -1;
-            });
+            grid.setAttribute('aria-busy', 'false');
+            grid.innerHTML = '';
 
-            dashboardPanels.forEach((panel) => {
-                const isActive = panel.dataset.dashboardPanel === activePanelId;
-                panel.classList.toggle('is-active', isActive);
-                panel.hidden = !isActive;
+            if (!Array.isArray(courses) || courses.length === 0) {
+                grid.classList.add('is-empty');
+                grid.innerHTML = `
+                    <div class="insights-empty-state">
+                        <div class="insights-empty-icon">📊</div>
+                        <h3 class="insights-empty-title">No courses available</h3>
+                        <p class="insights-empty-message">No ${filterType === 'uploaded' ? 'uploaded' : ''} courses found. Create and upload courses to see insights here.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.classList.remove('is-empty');
+
+            courses.forEach((course) => {
+                const card = document.createElement('article');
+                card.className = 'course-insight-card';
+
+                const uploadDate = course.created_at || course.uploaded_at || '';
+                const formattedDate = uploadDate ? formatDate(uploadDate) : 'N/A';
+                const views = course.watch_record_count || 0;
+                const totalWatchHours = course.totalWatchHours || 0;
+                const watchUnit = totalWatchHours === 1 ? 'hour' : 'hours';
+
+                card.innerHTML = `
+                    <div class="course-insight-header">
+                        <h4 class="course-insight-title">${escapeHtml(course.title || 'Untitled Course')}</h4>
+                        <span class="course-insight-badge">${escapeHtml(course.category || 'Course')}</span>
+                    </div>
+                    <div class="insight-metric">
+                        <span class="insight-metric-label">Total Views</span>
+                        <div class="insight-metric-value">${views}</div>
+                    </div>
+                    <div class="insight-metric">
+                        <span class="insight-metric-label">Total Watch Time</span>
+                        <div class="insight-metric-value">${totalWatchHours}</div>
+                        <span class="insight-metric-unit">${watchUnit}</span>
+                    </div>
+                    <div class="insight-metric">
+                        <span class="insight-metric-label">Upload Date</span>
+                        <div class="insight-metric-value" style="font-size: 1rem; color: var(--muted-strong);">${formattedDate}</div>
+                    </div>
+                `;
+
+                grid.appendChild(card);
             });
         }
 
-        dashboardTabs.forEach((tab, index) => {
-            tab.addEventListener('click', () => {
-                setActiveDashboardTab(tab.dataset.dashboardTab);
-            });
+        function populateCourseFilter() {
+            const select = document.getElementById('courseFilterSelect');
+            if (!select || !Array.isArray(allCoursesData)) return;
 
-            tab.addEventListener('keydown', (event) => {
-                if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
-                event.preventDefault();
-                const direction = event.key === 'ArrowRight' ? 1 : -1;
-                const nextIndex = (index + direction + dashboardTabs.length) % dashboardTabs.length;
-                const nextTab = dashboardTabs[nextIndex];
-                if (!nextTab) return;
-                setActiveDashboardTab(nextTab.dataset.dashboardTab);
-                nextTab.focus();
-            });
-        });
+            const existingOptions = select.querySelectorAll('option:not([value="all"])') || [];
+            existingOptions.forEach(opt => opt.remove());
 
-        setActiveDashboardTab('insights');
+            allCoursesData.forEach(course => {
+                const option = document.createElement('option');
+                option.value = course.id;
+                option.textContent = course.title || 'Untitled Course';
+                select.appendChild(option);
+            });
+        }
+
+        function filterAndRenderInsights(filterValue = 'all') {
+            let filteredCourses = allCoursesData;
+
+            if (filterValue !== 'all') {
+                filteredCourses = allCoursesData.filter(course => String(course.id) === String(filterValue));
+            }
+
+            renderCourseInsights(filteredCourses, filterValue);
+        }
+
+        const courseFilterSelect = document.getElementById('courseFilterSelect');
+        if (courseFilterSelect) {
+            courseFilterSelect.addEventListener('change', (e) => {
+                filterAndRenderInsights(e.target.value);
+            });
+        }
+
+        // Toggle Insights Visibility
+        const insightsToggleBtn = document.getElementById('insightsToggleBtn');
+        const insightsCollapsibleContent = document.getElementById('insightsCollapsibleContent');
+
+        if (insightsToggleBtn && insightsCollapsibleContent) {
+            insightsToggleBtn.addEventListener('click', () => {
+                const isExpanded = insightsToggleBtn.getAttribute('aria-expanded') === 'true';
+                insightsToggleBtn.setAttribute('aria-expanded', String(!isExpanded));
+                insightsCollapsibleContent.classList.toggle('collapsed', isExpanded);
+                
+                // Update button text
+                const toggleText = insightsToggleBtn.querySelector('.toggle-text');
+                if (toggleText) {
+                    toggleText.textContent = isExpanded ? 'EXPAND' : 'COMPACT';
+                }
+            });
+        }
 
         function formatDate(value) {
             if (!value) return 'N/A';
@@ -1108,7 +1128,6 @@
 
         async function loadInstructorDashboard() {
             renderCourseSkeletons();
-            renderTopWatchedLoadingState();
             try {
                 const response = await fetch(buildApiUrl(`/api/instructor-dashboard/${instructorId}`));
                 const data = await response.json();
@@ -1130,19 +1149,25 @@
                 const totalWatchHoursUnit = document.getElementById('totalWatchHoursUnit');
                 if (totalWatchHoursUnit) totalWatchHoursUnit.textContent = watchTimeDisplay.unit;
 
-                document.getElementById('latestUpload').textContent = formatDate(metrics.latestUpload);
+                // Store courses data for insights filtering
+                allCoursesData = (data.courses || []).map(course => ({
+                    ...course,
+                    totalWatchHours: course.totalWatchHours || 0,
+                    watch_record_count: course.watch_record_count || 0
+                }));
 
-                const topCourse = data.topCourse;
-                document.getElementById('topCourseName').textContent = topCourse
-                    ? `${topCourse.title} (${topCourse.enrolled_students} students)`
-                    : 'No courses yet';
+                // Populate the filter dropdown with course names
+                populateCourseFilter();
 
-                renderTopWatchedCourses(data.topWatchedCourses || []);
+                // Render course insights
+                filterAndRenderInsights('all');
+
+                // Render courses list
                 renderCourses(data.courses || []);
             } catch (error) {
                 console.error('Error fetching instructor dashboard:', error);
                 const grid = document.getElementById('instructorCoursesGrid');
-                const tbody = document.querySelector('#topWatchedTable tbody');
+                const insightsGrid = document.getElementById('courseInsightsGrid');
                 updateCourseLibraryBadge(0);
                 if (grid) {
                     grid.setAttribute('aria-busy', 'false');

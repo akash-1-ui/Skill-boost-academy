@@ -19,10 +19,10 @@
   --surface-soft: rgba(255, 255, 255, 0.06);
   --shadow: 0 1.4rem 4rem rgba(3, 7, 18, 0.42);
   --shadow-soft: 0 1rem 2.5rem rgba(3, 7, 18, 0.26);
-  --radius-xl: clamp(1.25rem, 2vw, 1.75rem);
-  --radius-lg: clamp(1.05rem, 1.7vw, 1.45rem);
-  --radius-md: clamp(0.95rem, 1.4vw, 1.2rem);
-  --radius-sm: 0.95rem;
+  --radius-xl: 0.5rem;
+  --radius-lg: 0.35rem;
+  --radius-md: 0.25rem;
+  --radius-sm: 0.2rem;
   --backdrop: blur(1.25rem);
   --layout-max: 69rem;
   --sidebar-width: clamp(14.25rem, 17vw, 15.75rem);
@@ -171,7 +171,7 @@ select:focus-visible {
   justify-content: center;
   inline-size: clamp(2.5rem, 4vw, 2.75rem);
   block-size: clamp(2.5rem, 4vw, 2.75rem);
-  border-radius: 0.95rem;
+  border-radius: 0.35rem;
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -743,12 +743,101 @@ select:focus-visible {
   gap: 0.5rem;
 }
 
-.analytics-title {
-  font-size: clamp(1.25rem, 2vw, 1.55rem);
-  font-weight: 800;
-  color: var(--text);
-  margin: 0.25rem 0 0;
-  letter-spacing: -0.03em;
+.insights-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.52rem 1rem;
+  margin-left: 1.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(59, 130, 246, 0.36);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(96, 165, 250, 0.1)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.08), transparent 70%);
+  color: rgba(59, 130, 246, 0.96);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 0.3rem 0.8rem rgba(59, 130, 246, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+html[data-theme="light"] .insights-toggle-btn {
+  border-color: rgba(59, 130, 246, 0.36);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(96, 165, 250, 0.08)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.06), transparent 70%);
+  color: rgba(59, 130, 246, 0.96);
+  box-shadow:
+    0 0.3rem 0.8rem rgba(59, 130, 246, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.insights-toggle-btn:hover {
+  border-color: rgba(59, 130, 246, 0.56);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(96, 165, 250, 0.16)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.1), transparent 70%);
+  box-shadow:
+    0 0.5rem 1.2rem rgba(59, 130, 246, 0.18),
+    0 0 0.8rem rgba(59, 130, 246, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+html[data-theme="light"] .insights-toggle-btn:hover {
+  border-color: rgba(59, 130, 246, 0.56);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(96, 165, 250, 0.14)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.08), transparent 70%);
+}
+
+.insights-toggle-btn:active {
+  transform: scale(0.96);
+}
+
+.toggle-text {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.toggle-icon {
+  display: inline-block;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-size: 0.8rem;
+}
+
+.insights-toggle-btn[aria-expanded="false"] .toggle-icon {
+  transform: rotate(-180deg);
+}
+
+/* Collapsible Content */
+.insights-collapsible-content {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease, visibility 0.3s ease;
+  opacity: 1;
+  visibility: visible;
+  overflow: hidden;
+  max-height: 1000px;
+}
+
+.insights-collapsible-content.collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  max-height: 0;
+}
+
+.insights-collapsible-content > * {
+  min-height: 0;
 }
 
 .analytics-description {
@@ -777,7 +866,7 @@ select:focus-visible {
   gap: 0.5rem;
   padding: 0.5rem 1rem;
   border: 1px solid transparent;
-  border-radius: 0.85rem;
+  border-radius: 0.25rem;
   background: transparent;
   color: var(--muted);
   font-family: var(--font-display);
@@ -798,6 +887,326 @@ select:focus-visible {
   color: var(--text);
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.16), rgba(56, 189, 248, 0.08));
   border-color: rgba(139, 92, 246, 0.32);
+}
+
+/* Analytics Filter Section */
+.analytics-filter-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(96, 165, 250, 0.04)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.06), transparent 70%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+html[data-theme="light"] .analytics-filter-section {
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.06), rgba(96, 165, 250, 0.03)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.04), transparent 70%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.filter-controls label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.filter-select {
+  padding: 0.55rem 0.9rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.88)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.06), transparent 70%);
+  color: rgba(16, 35, 69, 0.96);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 0.3rem 0.8rem rgba(59, 130, 246, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.filter-select option {
+  background: #f7fbff;
+  color: rgba(16, 35, 69, 0.96);
+}
+
+.filter-select:hover {
+  border-color: rgba(59, 130, 246, 0.44);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.94)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.08), transparent 70%);
+  box-shadow:
+    0 0.5rem 1.2rem rgba(59, 130, 246, 0.12),
+    0 0 0.8rem rgba(59, 130, 246, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.56);
+  box-shadow:
+    0 0 1.2rem rgba(59, 130, 246, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+html[data-theme="dark"] .filter-select {
+  padding: 0.55rem 0.9rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  background:
+    linear-gradient(135deg, rgba(8, 13, 34, 0.85), rgba(8, 13, 34, 0.8)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 70%);
+  color: var(--text);
+  box-shadow:
+    0 0.4rem 1rem rgba(56, 189, 248, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="dark"] .filter-select:hover {
+  border-color: rgba(56, 189, 248, 0.48);
+}
+
+html[data-theme="dark"] .filter-select:focus {
+  border-color: rgba(56, 189, 248, 0.6);
+}
+
+/* Course Insights Container */
+.course-insights-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.course-insights-list-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 1.5rem;
+  align-items: center;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  background:
+    linear-gradient(135deg, rgba(125, 211, 252, 0.1), rgba(139, 92, 246, 0.08)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.1), transparent 70%);
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 0.75rem;
+  box-shadow:
+    0 0.4rem 1rem rgba(56, 189, 248, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+html[data-theme="light"] .course-insights-list-header {
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(96, 165, 250, 0.06)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.06), transparent 70%);
+  box-shadow:
+    0 0.3rem 0.8rem rgba(59, 130, 246, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.insights-header-cell {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+
+.insights-header-cell.insights-header-title {
+  text-align: left;
+}
+
+.course-insights-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: all 0.3s ease;
+}
+
+.course-insight-card {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 1.5rem;
+  align-items: center;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  background:
+    linear-gradient(135deg, rgba(125, 211, 252, 0.06), rgba(139, 92, 246, 0.04)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.06), transparent 70%);
+  padding: 1rem 1.2rem;
+  overflow: hidden;
+  transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 0.4rem 1rem rgba(56, 189, 248, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="light"] .course-insight-card {
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(96, 165, 250, 0.03)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.04), transparent 70%);
+  box-shadow:
+    0 0.3rem 0.8rem rgba(59, 130, 246, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.course-insight-card:hover {
+  border-color: rgba(139, 92, 246, 0.32);
+  background:
+    linear-gradient(135deg, rgba(125, 211, 252, 0.1), rgba(139, 92, 246, 0.08)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.1), transparent 70%);
+  transform: translateX(0.2rem);
+  box-shadow:
+    0 0.6rem 1.4rem rgba(56, 189, 248, 0.1),
+    0 0 1rem rgba(56, 189, 248, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="light"] .course-insight-card:hover {
+  border-color: rgba(59, 130, 246, 0.28);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(96, 165, 250, 0.08)),
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.06), transparent 70%);
+  box-shadow:
+    0 0.4rem 1rem rgba(59, 130, 246, 0.1),
+    0 0 0.8rem rgba(59, 130, 246, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+}
+
+.course-insight-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.course-insight-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.3;
+  word-break: break-word;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-insight-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.32rem 0.55rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  background:
+    linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(125, 211, 252, 0.06)),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.05), transparent 70%);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--accent-2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.course-insight-metrics {
+  display: contents;
+}
+
+.insight-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: center;
+  padding: 0;
+  border: none;
+}
+
+.insight-metric:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.insight-metric-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.insight-metric-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent-2);
+  line-height: 1.1;
+}
+
+.insight-metric-unit {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--muted-strong);
+  margin-top: 0.1rem;
+}
+
+/* Empty State for Course Insights */
+.course-insights-grid.is-empty {
+  min-height: 12rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.insights-empty-state {
+  text-align: center;
+  padding: 2rem;
+}
+
+.insights-empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+
+.insights-empty-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+.insights-empty-message {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 0;
+}
   box-shadow: 0 0.4rem 1rem rgba(139, 92, 246, 0.1);
 }
 

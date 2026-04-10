@@ -18,16 +18,36 @@
   --surface-soft: rgba(255, 255, 255, 0.06);
   --shadow: 0 1.4rem 4rem rgba(3, 7, 18, 0.42);
   --shadow-soft: 0 1rem 2.5rem rgba(3, 7, 18, 0.26);
-  --radius-xl: clamp(1.35rem, 2vw, 1.8rem);
-  --radius-lg: clamp(1.05rem, 1.7vw, 1.45rem);
-  --radius-md: clamp(0.95rem, 1.4vw, 1.2rem);
-  --radius-sm: 0.95rem;
+  --radius-xl: 0.5rem;
+  --radius-lg: 0.35rem;
+  --radius-md: 0.25rem;
+  --radius-sm: 0.2rem;
   --backdrop: blur(1.25rem);
   --layout-max: 76rem;
   --page-gutter: clamp(0.95rem, 2.2vw, 1.6rem);
   --section-pad: clamp(1.15rem, 2.5vw, 2rem);
   --stack-gap: clamp(1rem, 1.8vw, 1.4rem);
   --control-height: clamp(2.8rem, 4vw, 3rem);
+}
+
+html[data-theme="light"] {
+  --bg-1: #f7fbff;
+  --bg-2: #e9f3ff;
+  --bg-3: #d8e7ff;
+  --bg-4: #fcfdff;
+  --text: #102345;
+  --text-soft: #254772;
+  --muted: #6c86aa;
+  --muted-strong: #4f6f95;
+  --accent: #4f46e5;
+  --accent-2: #2563eb;
+  --success: #0284c7;
+  --border: rgba(96, 165, 250, 0.18);
+  --border-strong: rgba(59, 130, 246, 0.24);
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-soft: rgba(59, 130, 246, 0.08);
+  --shadow: 0 1.25rem 3.2rem rgba(37, 99, 235, 0.12);
+  --shadow-soft: 0 0.9rem 2.2rem rgba(37, 99, 235, 0.08);
 }
 
 *,
@@ -185,6 +205,32 @@ a {
   font-size: 0.78rem;
 }
 
+html[data-theme="dark"] .logo-title,
+html[data-theme="dark"] .logo-copy {
+  color: #000;
+}
+
+html[data-theme="dark"] .logo-subtitle {
+  color: #000;
+}
+
+html[data-theme="dark"] .nav-links a {
+  color: #000;
+}
+
+html[data-theme="light"] .logo-title,
+html[data-theme="light"] .logo-copy {
+  color: #fff;
+}
+
+html[data-theme="light"] .logo-subtitle {
+  color: #fff;
+}
+
+html[data-theme="light"] .nav-links a {
+  color: #fff;
+}
+
 .nav-actions {
   position: relative;
   display: flex;
@@ -228,6 +274,18 @@ a {
   color: var(--text);
   border-color: rgba(125, 211, 252, 0.2);
   background: rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="dark"] .nav-links a:hover,
+html[data-theme="dark"] .nav-links a.active {
+  color: #000;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="light"] .nav-links a:hover,
+html[data-theme="light"] .nav-links a.active {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .nav-cta,
