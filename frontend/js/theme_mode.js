@@ -1,5 +1,5 @@
 (function themeModeBootstrap() {
-  const DEFAULT_THEME = 'dark';
+  const DEFAULT_THEME = 'light';
   const STORAGE_PREFIX = 'skillboost-theme-';
 
   function normalizeTheme(theme) {
@@ -109,7 +109,7 @@
     }
 
     const buttonRole = normalizeRole(button.dataset.themeRole || pageRole);
-    let theme = applyTheme(getStoredTheme(buttonRole), buttonRole);
+    let theme = applyTheme(DEFAULT_THEME, buttonRole);
     updateButton(button, theme);
 
     button.addEventListener('click', () => {
@@ -126,7 +126,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     const pageRole = inferRole();
-    const theme = applyTheme(getStoredTheme(pageRole), pageRole);
+    const theme = applyTheme(DEFAULT_THEME, pageRole);
 
     document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
       initializeToggle(button, pageRole);
@@ -137,7 +137,7 @@
   window.SkillBoostTheme = {
     applyStoredTheme(role) {
       const resolvedRole = normalizeRole(role || inferRole());
-      return applyTheme(getStoredTheme(resolvedRole), resolvedRole);
+      return applyTheme(DEFAULT_THEME, resolvedRole);
     }
   };
 })();

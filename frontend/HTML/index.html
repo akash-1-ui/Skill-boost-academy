@@ -7,10 +7,9 @@
   <script>
     (() => {
       try {
-        const theme = localStorage.getItem('skillboost-theme-student') === 'light' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.setAttribute('data-theme', 'light');
       } catch (error) {
-        document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.setAttribute('data-theme', 'light');
       }
     })();
   </script>
@@ -46,7 +45,7 @@
             <span class="theme-toggle-track" aria-hidden="true">
               <span class="theme-toggle-thumb"></span>
             </span>
-            <span class="theme-toggle-text" data-theme-label>Dark Mode</span>
+            <span class="theme-toggle-text" data-theme-label>Day Mode</span>
           </button>
           <a class="nav-cta access-trigger" href="#access">Open Portal</a>
         </div>

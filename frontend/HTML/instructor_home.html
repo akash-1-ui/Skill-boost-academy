@@ -7,11 +7,10 @@
     <script>
         (() => {
             try {
-                const theme = localStorage.getItem('skillboost-theme-instructor') === 'light' ? 'light' : 'dark';
-                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme', 'light');
                 document.documentElement.setAttribute('data-theme-role', 'instructor');
             } catch (error) {
-                document.documentElement.setAttribute('data-theme', 'dark');
+                document.documentElement.setAttribute('data-theme', 'light');
             }
         })();
     </script>
@@ -58,7 +57,7 @@
                             <span class="theme-toggle-track" aria-hidden="true">
                                 <span class="theme-toggle-thumb"></span>
                             </span>
-                            <span class="theme-toggle-text" data-theme-label>Dark Mode</span>
+                            <span class="theme-toggle-text" data-theme-label>Day Mode</span>
                         </button>
                         <a href="notifications.html?role=instructor" class="header-notification-link" aria-label="Open notifications">
                             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -444,11 +443,15 @@
     <script src="../js/app-config.js"></script>
     <script src="../js/theme_mode.js?v=20260331-theme-toggle"></script>
     <script src="../js/profile_drawer.js"></script>
+    <script src="../js/page-toast.js"></script>
     <script src="../js/account_actions.js"></script>
     <script src="../js/addcourse.js"></script>
     <script>
         const API_BASE = window.SkillBoostApp?.apiBase || window.location.origin;
         const buildApiUrl = window.SkillBoostApp?.buildApiUrl || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
+        const showPageToast = (message, tone = 'info', durationMs = 3200) => {
+            window.SkillBoostPageToast?.show?.(message, tone, durationMs);
+        };
         const instructorId = localStorage.getItem('instructorId');
         const instructorName = localStorage.getItem('instructorName');
         const instructorPhoto = localStorage.getItem('instructorPhoto');
@@ -489,8 +492,10 @@
         function handleInstructorAccessRevoked(message, notice = 'restricted_by_admin') {
             const formattedMessage = message || 'Access restricted by academy admin. You have been logged out. Contact the academy admin to restore access.';
             clearInstructorSession();
-            alert(`Access Update\n\n${formattedMessage}`);
-            window.location.href = buildInstructorLoginRedirect(notice);
+            showPageToast(formattedMessage, 'warning', 3600);
+            window.setTimeout(() => {
+                window.location.href = buildInstructorLoginRedirect(notice);
+            }, 900);
         }
 
         async function checkInstructorSessionAccess() {
@@ -1152,7 +1157,7 @@
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Unable to load watch analytics right now.</td></tr>';
                 }
-                alert(error.message || 'Failed to load dashboard details. Please try again later.');
+                showPageToast(error.message || 'Failed to load dashboard details. Please try again later.', 'error', 4200);
             }
         }
 
@@ -1182,9 +1187,10 @@
                 }
 
                 await loadInstructorDashboard();
+                showPageToast('Course deleted successfully.', 'success', 2800);
             } catch (error) {
                 console.error('Delete error:', error);
-                alert(error.message || 'Failed to delete course. Please try again.');
+                showPageToast(error.message || 'Failed to delete course. Please try again.', 'error', 4200);
             }
         }
 
@@ -1212,7 +1218,7 @@
                 openCourseEditor(course);
             } catch (error) {
                 console.error('Failed to load course for edit:', error);
-                alert('Unable to load the course for editing. Please try again.');
+                showPageToast('Unable to load the course for editing. Please try again.', 'error', 4200);
             }
         }
 
@@ -1286,39 +1292,6 @@
             }
         });
 
-        // Terminate account functionality
-        const terminateBtn = document.getElementById('terminateInstructor');
-        if (terminateBtn) {
-            terminateBtn.addEventListener('click', async () => {
-                const confirmDelete = confirm('Are you sure you want to terminate your account? All your courses and data will be permanently deleted. This cannot be undone.');
-                if (!confirmDelete) return;
-
-                const secondConfirm = confirm('This is your final warning. Your account and all associated data will be deleted permanently. Continue?');
-                if (!secondConfirm) return;
-
-                try {
-                    const response = await fetch(buildApiUrl('/api/terminate-instructor'), {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ instructorId, instructorEmail: localStorage.getItem('instructorEmail') })
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('Failed to terminate account');
-                    }
-
-                    alert('Your account has been terminated successfully.');
-                    localStorage.removeItem('instructorId');
-                    localStorage.removeItem('instructorName');
-                    localStorage.removeItem('instructorPhoto');
-                    localStorage.removeItem('instructorEmail');
-                    window.location.href = 'index.html';
-                } catch (error) {
-                    console.error('Termination error:', error);
-                    alert('Failed to terminate account. Please try again.');
-                }
-            });
-        }
     </script>
 </body>
 </html>

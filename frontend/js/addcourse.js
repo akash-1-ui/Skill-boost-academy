@@ -30,10 +30,13 @@ function initAddCoursePage() {
   const API_BASE = window.SkillBoostApp?.apiBase || window.location.origin;
   const buildApiUrl = window.SkillBoostApp?.buildApiUrl
     || ((path = '') => `${API_BASE}${String(path || '').startsWith('/') ? path : `/${path}`}`);
+  const showPageToast = (message, tone = 'info', durationMs = 3200) => {
+    window.SkillBoostPageToast?.show?.(message, tone, durationMs);
+  };
 
   const instructorId = localStorage.getItem('instructorId');
   if (!instructorId) {
-    alert('Please log in as an instructor to manage courses.');
+    showPageToast('Please log in as an instructor to manage courses.', 'warning', 2200);
     window.location.href = 'login.html?role=instructor';
     return;
   }
@@ -448,7 +451,7 @@ function initAddCoursePage() {
       courseSelect.innerHTML = '<option value="">Failed to load courses</option>';
       const message = buildNetworkFailureReason('load your courses');
       setFormStatus(uploadStatusEl, 'error', message);
-      alert(message);
+      showPageToast(message, 'error', 4200);
     }
   }
 
@@ -475,35 +478,35 @@ function initAddCoursePage() {
 
         if (!title) {
           setFormStatus(courseStatusEl, 'error', 'Please enter a course title.');
-          alert('Please enter a course title.');
+          showPageToast('Please enter a course title.', 'warning', 3200);
           return;
         }
         if (!selectedDuration) {
           setFormStatus(courseStatusEl, 'error', 'Please select a course duration.');
-          alert('Please select a course duration.');
+          showPageToast('Please select a course duration.', 'warning', 3200);
           return;
         }
         if (!category) {
           setFormStatus(courseStatusEl, 'error', 'Please enter a category.');
-          alert('Please enter a category.');
+          showPageToast('Please enter a category.', 'warning', 3200);
           return;
         }
         if (!description) {
           setFormStatus(courseStatusEl, 'error', 'Please enter a course description.');
-          alert('Please enter a course description.');
+          showPageToast('Please enter a course description.', 'warning', 3200);
           return;
         }
 
         if (!isEditing && !cover) {
           setFormStatus(courseStatusEl, 'error', 'Please select a cover image.');
-          alert('Please select a cover image.');
+          showPageToast('Please select a cover image.', 'warning', 3200);
           return;
         }
 
         const allowedImageTypes = ['image/jpeg', 'image/png', 'image/jpg'];
         if (cover && !allowedImageTypes.includes(cover.type)) {
           setFormStatus(courseStatusEl, 'error', 'Please upload a valid image file (jpg, jpeg, png).');
-          alert('Please upload a valid image file (jpg, jpeg, png).');
+          showPageToast('Please upload a valid image file (jpg, jpeg, png).', 'warning', 3600);
           return;
         }
 
@@ -531,18 +534,18 @@ function initAddCoursePage() {
             `Course ${actionLabel} failed. Please try again.`
           );
           setFormStatus(courseStatusEl, 'error', failureMessage);
-          alert(failureMessage);
+          showPageToast(failureMessage, 'error', 4200);
           return;
         }
 
         if (isEditing) {
           setFormStatus(courseStatusEl, 'success', 'Course updated successfully.');
-          alert('Course updated successfully!');
+          showPageToast('Course updated successfully.', 'success', 2800);
           clearEditMode();
         } else {
           pendingCourseId = data.courseId ? String(data.courseId) : pendingCourseId;
           setFormStatus(courseStatusEl, 'success', 'Course created successfully. You can upload lesson videos now.');
-          alert('Course created successfully! Now upload lesson videos.');
+          showPageToast('Course created successfully. Now upload lesson videos.', 'success', 3200);
         }
         createForm.reset();
         clearEditMode();
@@ -552,7 +555,7 @@ function initAddCoursePage() {
         console.error('Course create error:', error);
         const message = buildNetworkFailureReason(isEditing ? 'update the course' : 'create the course');
         setFormStatus(courseStatusEl, 'error', message);
-        alert(message);
+        showPageToast(message, 'error', 4200);
       }
     });
   }
@@ -578,6 +581,7 @@ function initAddCoursePage() {
       // Validation with proper error display (no resetUploadProgress!)
       if (!selectedCourse) {
         setFormStatus(uploadStatusEl, 'error', 'Please select a course.');
+        showPageToast('Please select a course before uploading a video.', 'warning', 3200);
         rememberUploadState({
           type: 'error',
           message: 'Please select a course.',
@@ -594,6 +598,7 @@ function initAddCoursePage() {
 
       if (!lessonVideo) {
         setFormStatus(uploadStatusEl, 'error', 'Please select a video file to upload.');
+        showPageToast('Please select a video file to upload.', 'warning', 3200);
         rememberUploadState({
           type: 'error',
           message: 'Please select a video file to upload.',
@@ -610,6 +615,7 @@ function initAddCoursePage() {
 
       if (lessonVideo.type && !lessonVideo.type.startsWith('video/')) {
         setFormStatus(uploadStatusEl, 'error', `Please upload a valid video file. Selected type: ${lessonVideo.type}`);
+        showPageToast(`Please upload a valid video file. Selected type: ${lessonVideo.type}`, 'warning', 3800);
         rememberUploadState({
           type: 'error',
           message: `Please upload a valid video file. Selected type: ${lessonVideo.type}`,
@@ -626,6 +632,7 @@ function initAddCoursePage() {
 
       if (lessonVideo.size > MAX_VIDEO_SIZE_BYTES) {
         setFormStatus(uploadStatusEl, 'error', 'Video upload failed: file size exceeds the 100MB limit.');
+        showPageToast('Video upload failed: file size exceeds the 100MB limit.', 'error', 4200);
         rememberUploadState({
           type: 'error',
           message: 'Video upload failed: file size exceeds the 100MB limit.',
@@ -785,6 +792,7 @@ function initAddCoursePage() {
         console.error('Upload failed with message:', failureMessage);
         setUploadProgress(Math.max(getUploadProgressPercent(), 1), 'Upload failed');
         setFormStatus(uploadStatusEl, 'error', failureMessage);
+        showPageToast(failureMessage, 'error', 4200);
         rememberUploadState({
           type: 'error',
           message: failureMessage,
@@ -816,6 +824,7 @@ function initAddCoursePage() {
 
       setUploadProgress(100, 'Upload complete', { complete: true });
       setFormStatus(uploadStatusEl, 'success', successMessage);
+      showPageToast(successMessage, 'success', 3600);
       rememberUploadState({
         type: 'success',
         message: successMessage,
@@ -855,6 +864,7 @@ function initAddCoursePage() {
           : buildNetworkFailureReason('upload the video');
       setUploadProgress(Math.max(getUploadProgressPercent(), 1), error.message.includes('timeout') ? 'Upload timed out' : 'Upload failed');
       setFormStatus(uploadStatusEl, 'error', message);
+      showPageToast(message, 'error', 4200);
       rememberUploadState({
         type: 'error',
         message,

@@ -1,4 +1,11 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://skill-boost-nexus.onrender.com/api/:path*"
+    }
+  ],
   "redirects": [
     {
       "source": "/",

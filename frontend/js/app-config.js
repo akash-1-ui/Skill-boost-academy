@@ -4,9 +4,15 @@
   // const DEPLOYED_BACKEND_ORIGIN = 'https://your-service.onrender.com';
   const DEPLOYED_BACKEND_ORIGIN = 'https://skill-boost-nexus.onrender.com';
   const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+  const SAME_ORIGIN_API_HOST_SUFFIXES = ['.vercel.app'];
 
   function normalizeOrigin(value) {
     return String(value || '').trim().replace(/\/+$/, '');
+  }
+
+  function hasHostnameSuffix(hostname, suffixes) {
+    const normalizedHostname = String(hostname || '').trim().toLowerCase();
+    return suffixes.some((suffix) => normalizedHostname.endsWith(String(suffix || '').trim().toLowerCase()));
   }
 
   function readStoredApiBase() {
@@ -81,14 +87,24 @@
   const currentOrigin = normalizeOrigin(window.location.origin);
   const isLocalHost = LOCAL_HOSTS.has(window.location.hostname);
   const deployedApiBase = normalizeOrigin(DEPLOYED_BACKEND_ORIGIN);
+  const shouldProxyApiThroughCurrentOrigin = !isLocalHost
+    && hasHostnameSuffix(window.location.hostname, SAME_ORIGIN_API_HOST_SUFFIXES)
+    && (!explicitApiBase || explicitApiBase === deployedApiBase || explicitApiBase === currentOrigin);
   const apiBase = explicitApiBase || (isLocalHost ? LOCAL_BACKEND_ORIGIN : (deployedApiBase || currentOrigin));
   const htmlBasePath = resolveHtmlBasePath();
 
   function buildApiUrl(path = '') {
-    if (/^https?:\/\//i.test(String(path || '').trim())) {
-      return String(path).trim();
+    const normalizedPath = String(path || '').trim();
+    if (/^https?:\/\//i.test(normalizedPath)) {
+      return normalizedPath;
     }
-    return `${apiBase}${ensureLeadingSlash(path)}`;
+
+    const resolvedPath = ensureLeadingSlash(normalizedPath);
+    if (shouldProxyApiThroughCurrentOrigin && resolvedPath.startsWith('/api/')) {
+      return `${currentOrigin}${resolvedPath}`;
+    }
+
+    return `${apiBase}${resolvedPath}`;
   }
 
   function buildPublicUrl(path = '') {

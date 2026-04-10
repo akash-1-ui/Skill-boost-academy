@@ -43,6 +43,9 @@ const editFileInput = document.getElementById('editVideoFile');
 const API_BASE = window.SkillBoostApp?.apiBase || window.location.origin;
 const buildApiUrl = window.SkillBoostApp?.buildApiUrl
   || ((path = '') => `${API_BASE}${String(path || '').startsWith('/') ? path : `/${path}`}`);
+const showPageToast = (message, tone = 'info', durationMs = 3200) => {
+  window.SkillBoostPageToast?.show?.(message, tone, durationMs);
+};
 
 let videos = [];
 let currentVideo = null;
@@ -273,7 +276,7 @@ async function updateVideo() {
   if (!currentVideo || !isNumericId(currentVideo.id)) return;
   const title = editTitleInput ? editTitleInput.value.trim() : '';
   if (!title) {
-    alert('Please enter a lesson title.');
+    showPageToast('Please enter a lesson title.', 'warning', 3200);
     return;
   }
 
@@ -306,15 +309,16 @@ async function updateVideo() {
       : { error: 'Unexpected response type', details: await response.text() };
 
     if (!response.ok) {
-      alert(data.error || data.message || 'Failed to update video.');
+      showPageToast(data.error || data.message || 'Failed to update video.', 'error', 4200);
       return;
     }
 
     closeEditModal();
     await loadVideos(currentVideo.id);
+    showPageToast('Video updated successfully.', 'success', 2800);
   } catch (error) {
     console.error('Video update error:', error);
-    alert(error.message || 'Failed to update video. Please try again.');
+    showPageToast(error.message || 'Failed to update video. Please try again.', 'error', 4200);
   }
 }
 
@@ -335,15 +339,16 @@ async function deleteVideo() {
       : { error: 'Unexpected response type', details: await response.text() };
 
     if (!response.ok) {
-      alert(data.error || data.message || 'Failed to delete video.');
+      showPageToast(data.error || data.message || 'Failed to delete video.', 'error', 4200);
       return;
     }
 
     currentVideo = null;
     await loadVideos();
+    showPageToast('Video deleted successfully.', 'success', 2800);
   } catch (error) {
     console.error('Video delete error:', error);
-    alert(error.message || 'Failed to delete video. Please try again.');
+    showPageToast(error.message || 'Failed to delete video. Please try again.', 'error', 4200);
   }
 }
 
@@ -363,14 +368,17 @@ async function deleteCourse() {
       : { error: 'Unexpected response type', details: await response.text() };
 
     if (!response.ok) {
-      alert(data.error || data.message || 'Failed to delete course.');
+      showPageToast(data.error || data.message || 'Failed to delete course.', 'error', 4200);
       return;
     }
 
-    window.location.href = 'instructor_home.html';
+    showPageToast('Course deleted successfully. Returning to the dashboard...', 'success', 2200);
+    window.setTimeout(() => {
+      window.location.href = 'instructor_home.html';
+    }, 900);
   } catch (error) {
     console.error('Course delete error:', error);
-    alert(error.message || 'Failed to delete course. Please try again.');
+    showPageToast(error.message || 'Failed to delete course. Please try again.', 'error', 4200);
   }
 }
 

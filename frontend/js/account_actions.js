@@ -1,6 +1,16 @@
 (function () {
   const buildApiUrl = window.SkillBoostApp?.buildApiUrl
     || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
+  const showPageToast = (message, tone = 'info', durationMs = 3200) => {
+    if (window.SkillBoostPageToast?.show) {
+      window.SkillBoostPageToast.show(message, tone, durationMs);
+      return;
+    }
+
+    if (message) {
+      window.alert(message);
+    }
+  };
 
   function clearStudentStorage(email) {
     if (!email) return;
@@ -30,7 +40,7 @@
   async function terminateStudentAccount() {
     const email = localStorage.getItem('studentEmail') || '';
     if (!email) {
-      alert('Student account not found. Please login again.');
+      showPageToast('Student account not found. Please login again.', 'error', 3600);
       return;
     }
 
@@ -39,7 +49,7 @@
 
     const typed = prompt('Type DELETE to confirm account deletion.');
     if (typed !== 'DELETE') {
-      alert('Account deletion cancelled.');
+      showPageToast('Account deletion cancelled.', 'warning', 2600);
       return;
     }
 
@@ -56,11 +66,13 @@
       }
 
       clearStudentStorage(email);
-      alert('Your account has been deleted successfully.');
-      window.location.href = 'index.html';
+      showPageToast('Your account has been deleted successfully.', 'success', 2800);
+      window.setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 900);
     } catch (error) {
       console.error('Account deletion error:', error);
-      alert(error.message || 'Failed to delete account. Please try again.');
+      showPageToast(error.message || 'Failed to delete account. Please try again.', 'error', 4200);
     }
   }
 
@@ -69,7 +81,7 @@
     const email = localStorage.getItem('instructorEmail') || '';
 
     if (!instructorId && !email) {
-      alert('Instructor account not found. Please login again.');
+      showPageToast('Instructor account not found. Please login again.', 'error', 3600);
       return;
     }
 
@@ -78,7 +90,7 @@
 
     const typed = prompt('Type DELETE to confirm account deletion.');
     if (typed !== 'DELETE') {
-      alert('Account deletion cancelled.');
+      showPageToast('Account deletion cancelled.', 'warning', 2600);
       return;
     }
 
@@ -95,11 +107,13 @@
       }
 
       clearInstructorStorage();
-      alert('Your account has been deleted successfully.');
-      window.location.href = 'index.html';
+      showPageToast('Your account has been deleted successfully.', 'success', 2800);
+      window.setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 900);
     } catch (error) {
       console.error('Account deletion error:', error);
-      alert(error.message || 'Failed to delete account. Please try again.');
+      showPageToast(error.message || 'Failed to delete account. Please try again.', 'error', 4200);
     }
   }
 

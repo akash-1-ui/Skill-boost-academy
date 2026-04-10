@@ -59,7 +59,7 @@
       return;
     }
 
-    let theme = applyTheme(getStoredTheme());
+    let theme = applyTheme(DEFAULT_THEME);
     updateButton(button, theme);
 
     button.addEventListener('click', () => {
@@ -76,7 +76,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    const theme = applyTheme(getStoredTheme());
+    const theme = applyTheme(DEFAULT_THEME);
 
     document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
       initializeToggle(button);
@@ -86,7 +86,7 @@
 
   window.SkillBoostAccessTheme = {
     applyStoredTheme() {
-      return applyTheme(getStoredTheme());
+      return applyTheme(DEFAULT_THEME);
     }
   };
 })();
