@@ -2,6 +2,7 @@ const ACCESS_SESSION_STORAGE_KEY = 'skillboost-access-owner-session';
 const PAYMENT_PENDING_STORAGE_KEY = 'skillboost-payment-pending';
 const ACCESS_API_BASE = window.SkillBoostApp?.buildApiUrl('/api/access')
     || `${window.location.origin}/api/access`;
+const ACCESS_REQUEST_TIMEOUT_MS = 30000;
 
 const FALLBACK_PLAN_CATALOG = {
     1: {
@@ -34,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!accessSession?.token) {
         showPaymentNotice('Your owner session is missing. Redirecting to the access page...', 'warning');
         window.setTimeout(() => {
-            window.location.href = 'access.html';
+            window.location.href = buildAccessPageUrl('access.html');
         }, 1400);
         return;
     }
@@ -44,7 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!paymentContext?.plan_id || paymentContext.plan_price <= 0) {
         showPaymentNotice('Select a paid subscription plan from the dashboard first. Redirecting...', 'warning');
         window.setTimeout(() => {
-            window.location.href = 'access-dashboard.html';
+            window.location.href = buildAccessPageUrl('access-dashboard.html');
         }, 1600);
         return;
     }
@@ -54,6 +55,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     bindPaymentEvents();
     await checkPaymentAvailability();
 });
+
+function buildAccessPageUrl(pageName) {
+    if (window.SkillBoostApp?.buildHtmlUrl) {
+        return window.SkillBoostApp.buildHtmlUrl(pageName);
+    }
+
+    return new URL(pageName, window.location.href).toString();
+}
 
 function bindPaymentEvents() {
     const checkoutForm = document.getElementById('paymentCheckoutForm');
@@ -320,7 +329,7 @@ async function handlePaymentSuccess(response) {
         );
 
         window.setTimeout(() => {
-            window.location.href = 'access-dashboard.html';
+            window.location.href = buildAccessPageUrl('access-dashboard.html');
         }, 2400);
     } catch (error) {
         setProcessingState(false);
@@ -400,8 +409,10 @@ async function requestAccess(path, options = {}) {
     const {
         method = 'GET',
         body,
-        token
+        token,
+        timeoutMs = ACCESS_REQUEST_TIMEOUT_MS
     } = options;
+    const normalizedMethod = String(method || 'GET').toUpperCase();
 
     const headers = {};
     if (token) {
@@ -411,11 +422,35 @@ async function requestAccess(path, options = {}) {
         headers['Content-Type'] = 'application/json';
     }
 
-    const response = await fetch(`${ACCESS_API_BASE}${path}`, {
-        method,
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body)
-    });
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timeoutId = controller
+        ? window.setTimeout(() => controller.abort(), timeoutMs)
+        : null;
+
+    let response;
+
+    try {
+        response = await fetch(`${ACCESS_API_BASE}${path}`, {
+            method: normalizedMethod,
+            headers,
+            body: body === undefined ? undefined : JSON.stringify(body),
+            signal: controller?.signal
+        });
+    } catch (error) {
+        if (timeoutId) {
+            window.clearTimeout(timeoutId);
+        }
+
+        if (error?.name === 'AbortError') {
+            throw new Error('The payment server is taking longer than expected to respond. If the backend just woke up after deployment, please wait a few seconds and try again.');
+        }
+
+        throw new Error('Unable to reach the payment server right now. Please check that the published backend is online and try again.');
+    }
+
+    if (timeoutId) {
+        window.clearTimeout(timeoutId);
+    }
 
     const payload = await response.json().catch(() => ({}));
 

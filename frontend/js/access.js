@@ -1,6 +1,7 @@
 const ACCESS_API_BASE = window.SkillBoostApp?.buildApiUrl('/api/access')
     || `${window.location.origin}/api/access`;
 const ACCESS_SESSION_STORAGE_KEY = 'skillboost-access-owner-session';
+const ACCESS_REQUEST_TIMEOUT_MS = 30000;
 
 let accessSession = readStoredSession();
 let toastTimeoutId = null;
@@ -112,6 +113,14 @@ function openRegisterModal() {
 
 function openLoginModal() {
     openModal('loginModal');
+}
+
+function buildAccessPageUrl(pageName) {
+    if (window.SkillBoostApp?.buildHtmlUrl) {
+        return window.SkillBoostApp.buildHtmlUrl(pageName);
+    }
+
+    return new URL(pageName, window.location.href).toString();
 }
 
 function openModal(modalId) {
@@ -270,7 +279,7 @@ async function handleTerminateAccessOwner() {
         showToast(response.message || 'Academy account terminated permanently.', 'success');
 
         window.setTimeout(() => {
-            window.location.href = 'access.html';
+            window.location.href = buildAccessPageUrl('access.html');
         }, 1200);
     } catch (error) {
         setNotice(
@@ -297,11 +306,13 @@ async function handleModalRegisterSubmit(event) {
     };
 
     if (!payload.academy_name || !payload.customer_name || !payload.customer_email || !payload.password) {
-        setNotice('modalRegisterNotice', 'Please fill in academy name, owner name, email, and password.', 'error');
+        setNotice('modalRegisterNotice', '', 'info');
+        showToast('Please fill in academy name, owner name, email, and password.', 'warning', 3600);
         return;
     }
 
-    setNotice('modalRegisterNotice', 'Creating your owner account and academy workspace...', 'info');
+    setNotice('modalRegisterNotice', '', 'info');
+    showToast('Creating your admin account and academy workspace...', 'info', 10000);
     setButtonBusy(submitButton, true, 'Create Owner Account', 'Creating Workspace...');
 
     try {
@@ -315,16 +326,17 @@ async function handleModalRegisterSubmit(event) {
         establishSession(response);
         console.log('[DEBUG] Session established');
         modal.querySelector('form').reset();
-        setNotice('modalRegisterNotice', 'Workspace created successfully. Opening dashboard...', 'success');
-        showToast('Owner account created successfully.', 'success');
+        setNotice('modalRegisterNotice', '', 'info');
+        showToast('Workspace created successfully. Opening dashboard...', 'success', 2200);
         closeModal(modal);
         
         // Redirect to dashboard page
         console.log('[DEBUG] Redirecting to dashboard...');
-        window.location.href = 'access-dashboard.html';
+        window.location.href = buildAccessPageUrl('access-dashboard.html');
     } catch (error) {
         console.error('[DEBUG] Register error:', error);
-        setNotice('modalRegisterNotice', error.message || 'Unable to create the owner account.', 'error');
+        setNotice('modalRegisterNotice', '', 'info');
+        showToast(error.message || 'Unable to create the owner account.', 'error', 4200);
     } finally {
         setButtonBusy(submitButton, false, 'Create Owner Account');
     }
@@ -341,11 +353,12 @@ async function handleModalLoginSubmit(event) {
     };
 
     if (!payload.email || !payload.password) {
-        setNotice('modalLoginNotice', 'Please enter the owner email and password.', 'error');
+        showToast('Please enter the admin email and password.', 'warning', 3200);
         return;
     }
 
-    setNotice('modalLoginNotice', 'Signing in to the owner dashboard...', 'info');
+    setNotice('modalLoginNotice', '', 'info');
+    showToast('Signing in to the admin dashboard...', 'info', 2200);
     setButtonBusy(submitButton, true, 'Login To Dashboard', 'Signing In...');
 
     try {
@@ -359,16 +372,17 @@ async function handleModalLoginSubmit(event) {
         establishSession(response);
         console.log('[DEBUG] Session established');
         modal.querySelector('form').reset();
-        setNotice('modalLoginNotice', 'Login successful. Loading dashboard...', 'success');
-        showToast('Owner session opened.', 'success');
+        setNotice('modalLoginNotice', '', 'info');
+        showToast('Login successful. Loading dashboard...', 'success', 2200);
         closeModal(modal);
         
         // Redirect to dashboard page
         console.log('[DEBUG] Redirecting to dashboard...');
-        window.location.href = 'access-dashboard.html';
+        window.location.href = buildAccessPageUrl('access-dashboard.html');
     } catch (error) {
         console.error('[DEBUG] Login error:', error);
-        setNotice('modalLoginNotice', error.message || 'Unable to login.', 'error');
+        setNotice('modalLoginNotice', '', 'info');
+        showToast(error.message || 'Unable to login.', 'error', 4200);
     } finally {
         setButtonBusy(submitButton, false, 'Login To Dashboard');
     }
@@ -396,7 +410,7 @@ function initializeDashboard() {
     
     if (!accessSession?.token) {
         console.log('[AUTH] No active session found - redirecting to home page');
-        window.location.href = 'access.html';
+        window.location.href = buildAccessPageUrl('access.html');
         return;
     }
     
@@ -521,7 +535,7 @@ function buildAcademyJoinLink(accessCode) {
         return '-';
     }
 
-    const joinUrl = new URL('index.html', window.location.href);
+    const joinUrl = new URL(buildAccessPageUrl('index.html'));
     joinUrl.searchParams.set('code', normalizedCode);
     return joinUrl.toString();
 }
@@ -1078,7 +1092,7 @@ function logoutAccessOwner() {
     showToast('Signed out of the owner portal.', 'success');
     
     // Redirect back to access home page
-    window.location.href = 'access.html';
+    window.location.href = buildAccessPageUrl('access.html');
 }
 
 function setAuthenticatedState(isAuthenticated) {
@@ -1210,6 +1224,10 @@ function setDashboardNotice(message, tone = 'info', forceHide = false) {
 }
 
 function establishSession(payload) {
+    if (!payload?.token) {
+        throw new Error('The deployed server did not return a valid admin session. Please check the published frontend and backend URLs.');
+    }
+
     accessSession = {
         token: payload.token,
         summary: payload.summary || null,
@@ -1240,8 +1258,10 @@ async function requestAccess(path, options = {}) {
     const {
         method = 'GET',
         body,
-        token
+        token,
+        timeoutMs = ACCESS_REQUEST_TIMEOUT_MS
     } = options;
+    const normalizedMethod = String(method || 'GET').toUpperCase();
 
     const headers = {};
     if (token) {
@@ -1251,12 +1271,36 @@ async function requestAccess(path, options = {}) {
         headers['Content-Type'] = 'application/json';
     }
 
-    const response = await fetch(`${ACCESS_API_BASE}${path}`, {
-        method,
-        cache: method.toUpperCase() === 'GET' ? 'no-store' : 'default',
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body)
-    });
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timeoutId = controller
+        ? window.setTimeout(() => controller.abort(), timeoutMs)
+        : null;
+
+    let response;
+
+    try {
+        response = await fetch(`${ACCESS_API_BASE}${path}`, {
+            method: normalizedMethod,
+            cache: normalizedMethod === 'GET' ? 'no-store' : 'default',
+            headers,
+            body: body === undefined ? undefined : JSON.stringify(body),
+            signal: controller?.signal
+        });
+    } catch (error) {
+        if (timeoutId) {
+            window.clearTimeout(timeoutId);
+        }
+
+        if (error?.name === 'AbortError') {
+            throw new Error('The server is taking longer than expected to respond. If the backend just woke up after deployment, please wait a few seconds and try again.');
+        }
+
+        throw new Error('Unable to reach the server right now. Please check that the published backend is online and try again.');
+    }
+
+    if (timeoutId) {
+        window.clearTimeout(timeoutId);
+    }
 
     const payload = await response.json().catch(() => ({}));
 
@@ -1305,7 +1349,7 @@ function fallbackCopy(value) {
     document.body.removeChild(textarea);
 }
 
-function showToast(message, tone = 'info') {
+function showToast(message, tone = 'info', durationMs = 2800) {
     const toast = document.getElementById('toast');
     toast.textContent = message;
     toast.className = `toast show ${tone}`;
@@ -1313,7 +1357,7 @@ function showToast(message, tone = 'info') {
     window.clearTimeout(toastTimeoutId);
     toastTimeoutId = window.setTimeout(() => {
         toast.classList.remove('show');
-    }, 2800);
+    }, durationMs);
 }
 
 function formatCurrency(amount, currency = 'INR') {

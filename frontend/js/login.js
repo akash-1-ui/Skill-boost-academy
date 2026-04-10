@@ -23,6 +23,7 @@ const loginRoleFeatureList = document.getElementById('loginRoleFeatureList');
 const loginRoleTipTitle = document.getElementById('loginRoleTipTitle');
 const loginRoleTipText = document.getElementById('loginRoleTipText');
 const loginRoleTipBadge = document.getElementById('loginRoleTipBadge');
+const authToast = document.getElementById('authToast');
 
 const forgotModal = document.getElementById('forgotPasswordModal');
 const forgotCloseBtn = document.getElementById('forgotCloseBtn');
@@ -58,6 +59,7 @@ let forgotOtpExpiresAt = 0;
 let forgotResendAvailableAt = 0;
 let forgotOtpTimerId = null;
 let currentRole = 'instructor';
+let authToastTimeoutId = null;
 
 const loginRoleContent = {
   student: {
@@ -218,6 +220,28 @@ function setForgotStatus(message, type) {
   if (type === 'success') forgotStatus.classList.add('forgot-status-success');
 }
 
+function hideAuthToast() {
+  if (!authToast) {
+    return;
+  }
+
+  authToast.classList.remove('show');
+}
+
+function showAuthToast(message, type = 'info', durationMs = 3200) {
+  if (!authToast || !message) {
+    return;
+  }
+
+  authToast.textContent = message;
+  authToast.className = `auth-toast show ${type}`;
+
+  window.clearTimeout(authToastTimeoutId);
+  authToastTimeoutId = window.setTimeout(() => {
+    hideAuthToast();
+  }, durationMs);
+}
+
 function setAuthStatus(element, message, type = 'info') {
   if (!element) {
     return;
@@ -259,11 +283,56 @@ function getRoleLabel(role) {
 
 function setRoleStatus(role, message, type = 'error') {
   const statusElement = getRoleStatusElement(role);
-  if (!statusElement) {
-    return null;
+  setAuthStatus(statusElement, '', type);
+  showAuthToast(message, type === 'error' ? 'error' : 'info', type === 'error' ? 4200 : 3600);
+}
+
+function redirectToStudentHome(result, email, profile = null) {
+  const resolvedStudentId = String(profile?.id || result?.student?.id || '');
+  const resolvedStudentName = profile?.name || result?.student?.name || email;
+
+  if (result?.student?.id) {
+    localStorage.setItem('studentId', String(result.student.id));
+  }
+  if (profile?.name) {
+    localStorage.setItem(`studentName_${email}`, profile.name);
+  }
+  if (profile?.id) {
+    localStorage.setItem('studentId', String(profile.id));
   }
 
-  setAuthStatus(statusElement, message, type);
+  localStorage.setItem('studentEmail', email);
+  localStorage.setItem('academyId', result?.student?.academy_id || '');
+  localStorage.setItem('user', JSON.stringify({
+    id: resolvedStudentId,
+    role: 'student',
+    username: resolvedStudentName,
+    email
+  }));
+
+  showAuthToast('Login successful. Opening your student dashboard...', 'success', 2200);
+  window.setTimeout(() => {
+    window.location.href = 'student_home.html';
+  }, 650);
+}
+
+function redirectToInstructorHome(payload, email) {
+  localStorage.setItem('instructorId', payload.instructor.id);
+  localStorage.setItem('instructorName', payload.instructor.name);
+  localStorage.setItem('instructorPhoto', payload.instructor.photo || '/uploads/default-avatar.svg');
+  localStorage.setItem('instructorEmail', payload.instructor.email);
+  localStorage.setItem('academyId', payload.instructor.academy_id || '');
+  localStorage.setItem('user', JSON.stringify({
+    id: String(payload.instructor.id),
+    role: 'instructor',
+    username: payload.instructor.name || payload.instructor.email || 'Instructor',
+    email: payload.instructor.email || email
+  }));
+
+  showAuthToast('Login successful. Opening your instructor dashboard...', 'success', 2200);
+  window.setTimeout(() => {
+    window.location.href = 'instructor_home.html';
+  }, 650);
 }
 
 function renderRoleIntro(selectedRole) {
@@ -662,12 +731,15 @@ studentForm?.addEventListener('submit', async (event) => {
   studentAccessCodeInput.value = accessCode;
 
   if (!accessCode || !email || !password) {
-    setAuthStatus(studentLoginStatus, 'Please enter the academy access code, email, and password.', 'error');
+    setAuthStatus(studentLoginStatus, '', 'info');
+    showAuthToast('Please enter the academy access code, email, and password.', 'warning', 3600);
     return;
   }
 
-  setAuthStatus(studentLoginStatus, 'Signing in to the student dashboard...', 'info');
+  setAuthStatus(studentLoginStatus, '', 'info');
+  showAuthToast('Signing in to the student dashboard...', 'info', 10000);
   setSubmitState(studentForm, true, 'Signing In...');
+  let redirectScheduled = false;
 
   try {
     const res = await fetch(buildApiUrl('/api/login/student'), {
@@ -680,61 +752,30 @@ studentForm?.addEventListener('submit', async (event) => {
 
     if (!res.ok) {
       const errorMessage = result.error || 'Login failed. Please check your credentials and try again.';
-      setAuthStatus(studentLoginStatus, errorMessage, 'error');
+      setAuthStatus(studentLoginStatus, '', 'info');
+      showAuthToast(errorMessage, 'error', 4200);
       return;
     }
 
-    setAuthStatus(studentLoginStatus, 'Login successful. Opening your dashboard...', 'success');
+    let profile = null;
 
-    fetch(buildApiUrl(`/api/student-profile?email=${encodeURIComponent(email)}`))
-      .then((res2) => res2.json())
-      .then((profile) => {
-        const resolvedStudentId = String(profile?.id || result?.student?.id || '');
-        const resolvedStudentName = profile?.name || result?.student?.name || email;
+    try {
+      const profileResponse = await fetch(buildApiUrl(`/api/student-profile?email=${encodeURIComponent(email)}`));
+      profile = await profileResponse.json();
+    } catch (profileError) {
+      profile = null;
+    }
 
-        if (result?.student?.id) {
-          localStorage.setItem('studentId', String(result.student.id));
-        }
-        if (profile?.name) {
-          localStorage.setItem(`studentName_${email}`, profile.name);
-        }
-        if (profile?.id) {
-          localStorage.setItem('studentId', String(profile.id));
-        }
-
-        localStorage.setItem('studentEmail', email);
-        localStorage.setItem('academyId', result?.student?.academy_id || '');
-        localStorage.setItem('user', JSON.stringify({
-          id: resolvedStudentId,
-          role: 'student',
-          username: resolvedStudentName,
-          email
-        }));
-        window.location.href = 'student_home.html';
-      })
-      .catch(() => {
-        const fallbackStudentId = String(result?.student?.id || '');
-        const fallbackStudentName = result?.student?.name || email;
-
-        if (result?.student?.id) {
-          localStorage.setItem('studentId', String(result.student.id));
-        }
-
-        localStorage.setItem('studentEmail', email);
-        localStorage.setItem('academyId', result?.student?.academy_id || '');
-        localStorage.setItem('user', JSON.stringify({
-          id: fallbackStudentId,
-          role: 'student',
-          username: fallbackStudentName,
-          email
-        }));
-        window.location.href = 'student_home.html';
-      });
+    redirectScheduled = true;
+    redirectToStudentHome(result, email, profile);
   } catch (error) {
     console.error('Student login failed:', error);
-    setAuthStatus(studentLoginStatus, 'Network error or server unavailable. Please try again.', 'error');
+    setAuthStatus(studentLoginStatus, '', 'info');
+    showAuthToast('Network error or server unavailable. Please try again.', 'error', 4200);
   } finally {
-    setSubmitState(studentForm, false, 'Signing In...');
+    if (!redirectScheduled) {
+      setSubmitState(studentForm, false, 'Signing In...');
+    }
   }
 });
 
@@ -748,12 +789,15 @@ instructorForm?.addEventListener('submit', async (event) => {
   instructorAccessCodeInput.value = accessCode;
 
   if (!accessCode || !email || !password) {
-    setAuthStatus(instructorLoginStatus, 'Please enter the academy access code, email, and password.', 'error');
+    setAuthStatus(instructorLoginStatus, '', 'info');
+    showAuthToast('Please enter the academy access code, email, and password.', 'warning', 3600);
     return;
   }
 
-  setAuthStatus(instructorLoginStatus, 'Signing in to the instructor dashboard...', 'info');
+  setAuthStatus(instructorLoginStatus, '', 'info');
+  showAuthToast('Signing in to the instructor dashboard...', 'info', 10000);
   setSubmitState(instructorForm, true, 'Signing In...');
+  let redirectScheduled = false;
 
   try {
     const res = await fetch(buildApiUrl('/api/login/instructor'), {
@@ -766,7 +810,8 @@ instructorForm?.addEventListener('submit', async (event) => {
 
     if (!res.ok) {
       const errorMessage = payload.error || 'Login failed. Please check your credentials and try again.';
-      setAuthStatus(instructorLoginStatus, errorMessage, 'error');
+      setAuthStatus(instructorLoginStatus, '', 'info');
+      showAuthToast(errorMessage, 'error', 4200);
       return;
     }
 
@@ -774,24 +819,15 @@ instructorForm?.addEventListener('submit', async (event) => {
       throw new Error('Invalid instructor data received');
     }
 
-    localStorage.setItem('instructorId', payload.instructor.id);
-    localStorage.setItem('instructorName', payload.instructor.name);
-    localStorage.setItem('instructorPhoto', payload.instructor.photo || '/uploads/default-avatar.svg');
-    localStorage.setItem('instructorEmail', payload.instructor.email);
-    localStorage.setItem('academyId', payload.instructor.academy_id || '');
-    localStorage.setItem('user', JSON.stringify({
-      id: String(payload.instructor.id),
-      role: 'instructor',
-      username: payload.instructor.name || payload.instructor.email || 'Instructor',
-      email: payload.instructor.email || email
-    }));
-
-    setAuthStatus(instructorLoginStatus, 'Login successful. Opening your dashboard...', 'success');
-    window.location.href = 'instructor_home.html';
+    redirectScheduled = true;
+    redirectToInstructorHome(payload, email);
   } catch (error) {
     console.error('Instructor login failed:', error);
-    setAuthStatus(instructorLoginStatus, error.message || 'Login failed. Please try again.', 'error');
+    setAuthStatus(instructorLoginStatus, '', 'info');
+    showAuthToast(error.message || 'Login failed. Please try again.', 'error', 4200);
   } finally {
-    setSubmitState(instructorForm, false, 'Signing In...');
+    if (!redirectScheduled) {
+      setSubmitState(instructorForm, false, 'Signing In...');
+    }
   }
 });

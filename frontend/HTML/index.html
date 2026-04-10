@@ -4,6 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Skill Boost Nexus</title>
+  <script>
+    (() => {
+      try {
+        const theme = localStorage.getItem('skillboost-theme-student') === 'light' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (error) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -32,6 +42,12 @@
             <li><a href="#access" id="accessLink" class="access-trigger">Check in</a></li>
             <li><a href="#tracks">Tracks</a></li>
           </ul>
+          <button type="button" class="theme-toggle" id="indexThemeToggle" data-theme-toggle>
+            <span class="theme-toggle-track" aria-hidden="true">
+              <span class="theme-toggle-thumb"></span>
+            </span>
+            <span class="theme-toggle-text" data-theme-label>Dark Mode</span>
+          </button>
           <a class="nav-cta access-trigger" href="#access">Open Portal</a>
         </div>
       </div>
@@ -204,5 +220,6 @@
       accessSection.classList.add('open');
     }
   </script>
+  <script src="../js/theme_mode.js"></script>
 </body>
 </html>

@@ -2685,26 +2685,30 @@ td {
 /* Toast */
 .toast {
     position: fixed;
-    bottom: var(--space-lg);
-    right: var(--space-lg);
-    max-width: min(400px, calc(100vw - var(--space-xl)));
-    padding: var(--space-lg);
-    border-radius: var(--radius-md);
+    top: var(--space-lg);
+    left: 50%;
+    width: min(340px, calc(100vw - 1.5rem));
+    padding: 0.85rem 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.26);
     color: white;
     background: rgba(29, 78, 216, 0.94);
     box-shadow: var(--shadow-lg);
     opacity: 0;
-    transform: translateY(20px);
+    transform: translate(-50%, -16px);
     pointer-events: none;
     transition: all 0.3s ease;
-    z-index: 100;
-    font-size: 0.95rem;
-    font-weight: 500;
+    z-index: 260;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.45;
+    text-align: center;
+    backdrop-filter: blur(14px);
 }
 
 .toast.show {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate(-50%, 0);
     pointer-events: auto;
 }
 

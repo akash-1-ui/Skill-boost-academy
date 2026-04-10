@@ -50,15 +50,16 @@
         body: JSON.stringify({ email })
       });
 
-      const payload = await response.json().catch(() => ({}));
+      const payload = await response.json().catch(() => ({ error: 'Failed to parse response' }));
       if (!response.ok) {
-        throw new Error(payload.error || 'Failed to delete account');
+        throw new Error(payload.error || payload.message || 'Failed to delete account');
       }
 
       clearStudentStorage(email);
-      alert('Your account has been deleted.');
+      alert('Your account has been deleted successfully.');
       window.location.href = 'index.html';
     } catch (error) {
+      console.error('Account deletion error:', error);
       alert(error.message || 'Failed to delete account. Please try again.');
     }
   }
@@ -88,15 +89,16 @@
         body: JSON.stringify({ instructorId, email })
       });
 
-      const payload = await response.json().catch(() => ({}));
+      const payload = await response.json().catch(() => ({ error: 'Failed to parse response' }));
       if (!response.ok) {
-        throw new Error(payload.error || 'Failed to delete account');
+        throw new Error(payload.error || payload.message || 'Failed to delete account');
       }
 
       clearInstructorStorage();
-      alert('Your account has been deleted.');
+      alert('Your account has been deleted successfully.');
       window.location.href = 'index.html';
     } catch (error) {
+      console.error('Account deletion error:', error);
       alert(error.message || 'Failed to delete account. Please try again.');
     }
   }

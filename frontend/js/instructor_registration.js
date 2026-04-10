@@ -2,11 +2,13 @@ const instructorRegistrationForm = document.getElementById('instructorRegistrati
 const instructorAccessCodeInput = document.getElementById('accessCode');
 const instructorSuccessMessage = document.getElementById('success-message');
 const instructorRegistrationStatus = document.getElementById('instructorRegistrationStatus');
+const authToast = document.getElementById('authToast');
 
 const instructorRegistrationQuery = new URLSearchParams(window.location.search);
 const presetInstructorAccessCode = normalizeAccessCode(instructorRegistrationQuery.get('code'));
 const buildApiUrl = window.SkillBoostApp?.buildApiUrl
   || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
+let authToastTimeoutId = null;
 
 if (instructorAccessCodeInput && presetInstructorAccessCode) {
   instructorAccessCodeInput.value = presetInstructorAccessCode;
@@ -31,6 +33,28 @@ function setInstructorRegistrationStatus(message, type = 'info') {
   instructorRegistrationStatus.hidden = false;
   instructorRegistrationStatus.textContent = message;
   instructorRegistrationStatus.className = `auth-status ${type}`;
+}
+
+function hideAuthToast() {
+  if (!authToast) {
+    return;
+  }
+
+  authToast.classList.remove('show');
+}
+
+function showAuthToast(message, type = 'info', durationMs = 3200) {
+  if (!authToast || !message) {
+    return;
+  }
+
+  authToast.textContent = message;
+  authToast.className = `auth-toast show ${type}`;
+
+  window.clearTimeout(authToastTimeoutId);
+  authToastTimeoutId = window.setTimeout(() => {
+    hideAuthToast();
+  }, durationMs);
 }
 
 function setInstructorSubmitState(button, busy, busyLabel) {
@@ -61,17 +85,21 @@ instructorRegistrationForm.addEventListener('submit', async (event) => {
   instructorSuccessMessage.style.display = 'none';
 
   if (!accessCode || !name || !email || !expertise || !password) {
-    setInstructorRegistrationStatus('Please fill in every required field, including the academy access code.', 'error');
+    setInstructorRegistrationStatus('', 'info');
+    showAuthToast('Please fill in every required field, including the academy access code.', 'warning', 3600);
     return;
   }
 
   if (!email.includes('@')) {
-    setInstructorRegistrationStatus('Please enter a valid email address.', 'error');
+    setInstructorRegistrationStatus('', 'info');
+    showAuthToast('Please enter a valid email address.', 'warning', 3600);
     return;
   }
 
-  setInstructorRegistrationStatus('Creating your instructor account...', 'info');
+  setInstructorRegistrationStatus('', 'info');
+  showAuthToast('Creating your instructor account...', 'info', 10000);
   setInstructorSubmitState(submitButton, true, 'Registering...');
+  let redirectScheduled = false;
 
   try {
     const response = await fetch(buildApiUrl('/api/register/instructor'), {
@@ -92,16 +120,20 @@ instructorRegistrationForm.addEventListener('submit', async (event) => {
     const payload = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      setInstructorRegistrationStatus(payload.error || 'Registration failed. Please check your details and try again.', 'error');
+      setInstructorRegistrationStatus('', 'info');
+      showAuthToast(payload.error || 'Registration failed. Please check your details and try again.', 'error', 4200);
       return;
     }
 
     if (payload.access_status === 'restricted') {
-      setInstructorRegistrationStatus(
+      setInstructorRegistrationStatus('', 'info');
+      showAuthToast(
         payload.message || 'Account created, but access is restricted by the academy admin because all active instructor seats are full.',
-        'error'
+        'error',
+        4200
       );
       const nextUrl = `login.html?role=instructor&code=${encodeURIComponent(accessCode)}&email=${encodeURIComponent(email)}&notice=restricted_by_admin`;
+      redirectScheduled = true;
       window.setTimeout(() => {
         window.location.href = nextUrl;
       }, 1800);
@@ -109,16 +141,20 @@ instructorRegistrationForm.addEventListener('submit', async (event) => {
     }
 
     setInstructorRegistrationStatus('', 'info');
-    instructorSuccessMessage.style.display = 'block';
+    showAuthToast('Registration successful. Redirecting to instructor login...', 'success', 2200);
 
     const nextUrl = `login.html?role=instructor&code=${encodeURIComponent(accessCode)}&email=${encodeURIComponent(email)}`;
+    redirectScheduled = true;
     window.setTimeout(() => {
       window.location.href = nextUrl;
     }, 1200);
   } catch (error) {
     console.error('Instructor registration error:', error);
-    setInstructorRegistrationStatus('Network error or server unavailable. Please try again.', 'error');
+    setInstructorRegistrationStatus('', 'info');
+    showAuthToast('Network error or server unavailable. Please try again.', 'error', 4200);
   } finally {
-    setInstructorSubmitState(submitButton, false, 'Registering...');
+    if (!redirectScheduled) {
+      setInstructorSubmitState(submitButton, false, 'Registering...');
+    }
   }
 });

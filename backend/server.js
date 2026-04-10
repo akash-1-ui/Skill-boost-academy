@@ -42,6 +42,9 @@ const LOCAL_VIDEO_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const ACCESS_OWNER_JWT_SECRET = process.env.ACCESS_OWNER_JWT_SECRET || 'skillboostacademy-access-owner-secret';
 const PASSWORD_RESET_JWT_SECRET = process.env.PASSWORD_RESET_JWT_SECRET || 'skillboostacademy-password-reset-secret';
 const RAZORPAY_API_BASE = 'https://api.razorpay.com/v1';
+const PROJECT_ROOT = path.join(__dirname, '..');
+const FRONTEND_ROOT = path.join(PROJECT_ROOT, 'frontend');
+const FRONTEND_HTML_ROOT = path.join(FRONTEND_ROOT, 'HTML');
 
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
@@ -110,7 +113,8 @@ app.use(cors({
 app.use(bodyParser.json({ limit: '25mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '25mb' }));
 
-app.use(express.static(path.join(__dirname, '..')));
+app.use(express.static(FRONTEND_ROOT));
+app.use(express.static(PROJECT_ROOT));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/videos', express.static(path.join(__dirname, 'videos')));
 
@@ -121,7 +125,7 @@ app.use((req, res, next) => {
 
 // Root route - serve index.html
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'HTML', 'index.html'));
+    res.sendFile(path.join(FRONTEND_HTML_ROOT, 'index.html'));
 });
 
 // Health check endpoint - verify backend and Cloudinary status
@@ -2661,10 +2665,10 @@ app.delete('/api/account/student', async (req, res) => {
         await db.query('DELETE FROM password_reset_otps WHERE user_id = ?', [userId]);
         await db.query('DELETE FROM users WHERE id = ?', [userId]);
 
-        return res.json({ message: 'Student account deleted successfully' });
+        return res.json({ success: true, message: 'Student account deleted successfully' });
     } catch (error) {
         console.error('Student account delete error:', error);
-        return res.status(500).json({ error: 'Failed to delete account' });
+        return res.status(500).json({ success: false, error: 'Failed to delete account', details: error.message });
     }
 });
 
@@ -2677,28 +2681,90 @@ app.delete('/api/account/instructor', async (req, res) => {
             return res.status(400).json({ error: 'Instructor ID or email is required' });
         }
 
-        const [rows] = instructorId
-            ? await db.query('SELECT id, email FROM users WHERE id = ? AND role = ? LIMIT 1', [instructorId, 'instructor'])
-            : await db.query('SELECT id, email FROM users WHERE email = ? AND role = ? LIMIT 1', [email, 'instructor']);
-
-        if (rows.length === 0) {
-            return res.status(404).json({ error: 'Instructor account not found' });
+        // First, get the user_id from instructors table
+        let userId;
+        if (instructorId) {
+            const [instructorRows] = await db.query(
+                'SELECT user_id FROM instructors WHERE id = ?',
+                [instructorId]
+            );
+            if (instructorRows.length === 0) {
+                return res.status(404).json({ error: 'Instructor account not found' });
+            }
+            userId = instructorRows[0].user_id;
+        } else if (email) {
+            const [userRows] = await db.query(
+                'SELECT id FROM users WHERE email = ? AND role = ?',
+                [email, 'instructor']
+            );
+            if (userRows.length === 0) {
+                return res.status(404).json({ error: 'Instructor account not found' });
+            }
+            userId = userRows[0].id;
         }
 
-        const userId = rows[0].id;
+        // Delete instructor-related data
+        const [instructorRows] = await db.query(
+            'SELECT id FROM instructors WHERE user_id = ?',
+            [userId]
+        );
 
-        const removedCourses = await deleteInstructorCourses(userId);
+        if (instructorRows.length > 0) {
+            const instId = instructorRows[0].id;
+            
+            // Get all courses for this instructor
+            const [courses] = await db.query(
+                'SELECT id FROM courses WHERE instructor_id = ?',
+                [instId]
+            );
+
+            // Delete videos for all courses
+            for (const course of courses) {
+                await db.query(
+                    'DELETE FROM course_videos WHERE course_id = ?',
+                    [course.id]
+                );
+            }
+
+            // Delete enrollments for all courses
+            for (const course of courses) {
+                await db.query(
+                    'DELETE FROM enrollments WHERE course_id = ?',
+                    [course.id]
+                );
+            }
+
+            // Delete courses
+            await db.query(
+                'DELETE FROM courses WHERE instructor_id = ?',
+                [instId]
+            );
+
+            // Delete messages
+            await db.query(
+                'DELETE FROM messages WHERE instructor_id = ?',
+                [instId]
+            );
+
+            // Delete instructor record
+            await db.query(
+                'DELETE FROM instructors WHERE id = ?',
+                [instId]
+            );
+        }
+
+        // Delete user-related data
         await db.query('DELETE FROM notifications WHERE user_id = ?', [userId]);
         await db.query('DELETE FROM password_reset_otps WHERE user_id = ?', [userId]);
         await db.query('DELETE FROM users WHERE id = ?', [userId]);
 
         return res.json({
-            message: 'Instructor account deleted successfully',
-            removedCourses
+            success: true,
+            message: 'Instructor account deleted successfully'
         });
     } catch (error) {
         console.error('Instructor account delete error:', error);
-        return res.status(500).json({ error: 'Failed to delete account' });
+        return res.status(500).json({ success: false, error: 'Failed to delete account', details: error.message });
     }
 });
 
@@ -6071,7 +6137,7 @@ app.use((req, res) => {
         });
     }
 
-    return res.status(404).sendFile(path.join(__dirname, '..', 'HTML', 'index.html'), (error) => {
+    return res.status(404).sendFile(path.join(FRONTEND_HTML_ROOT, 'index.html'), (error) => {
         if (error) {
             res.status(404).json({
                 message: 'Route not found',
@@ -6084,4 +6150,3 @@ app.use((req, res) => {
 app.listen(port, () => {
     console.log(`Backend server listening on http://localhost:${port}`);
 });
-
