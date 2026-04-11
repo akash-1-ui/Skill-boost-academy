@@ -21,7 +21,9 @@ const {
 const {
     getCloudinaryStatus,
     uploadVideoAsset,
+    uploadCoverAsset,
     deleteVideoAssetByUrl,
+    deleteCoverAssetByUrl,
     extractCloudinaryPublicId
 } = require('./cloudinary');
 
@@ -1533,7 +1535,9 @@ async function deleteCourseWithAssets(courseId, options = {}) {
     await db.query('DELETE FROM videos WHERE course_id = ?', [normalizedCourseId]);
     await db.query('DELETE FROM courses WHERE id = ?', [normalizedCourseId]);
 
-    await deleteStoredFile(course.cover_path);
+    if (course.cover_path) {
+        await deleteCoverAssetByUrl(course.cover_path);
+    }
 
     if (course.video_path) {
         await deleteVideoStorageAsset(course.video_path);
@@ -2083,38 +2087,49 @@ app.put('/api/courses/:courseId', upload.fields([
         }
 
         let coverPath = existingCourse.cover_path;
+        let uploadedCoverUrl = null;
+
         if (req.files && req.files.cover && req.files.cover[0]) {
-            coverPath = `/uploads/covers/${path.basename(req.files.cover[0].path)}`;
+            const uploadedCover = await uploadCoverAsset(req.files.cover[0].path);
+            uploadedCoverUrl = uploadedCover.secure_url || uploadedCover.url;
+            coverPath = uploadedCoverUrl;
         }
 
         const expiryDate = calculateExpiryDate(existingCourse.created_at, durationOption.days);
 
-        await db.query(
-            `UPDATE courses
-             SET title = ?,
-                 duration = ?,
-                 duration_days = ?,
-                 duration_label = ?,
-                 expiry_date = ?,
-                 category = ?,
-                 description = ?,
-                 cover_path = ?
-             WHERE id = ?`,
-            [
-                title,
-                durationOption.optionLabel,
-                durationOption.days,
-                durationOption.planLabel,
-                expiryDate,
-                category,
-                description,
-                coverPath,
-                courseId
-            ]
-        );
+        try {
+            await db.query(
+                `UPDATE courses
+                 SET title = ?,
+                     duration = ?,
+                     duration_days = ?,
+                     duration_label = ?,
+                     expiry_date = ?,
+                     category = ?,
+                     description = ?,
+                     cover_path = ?
+                 WHERE id = ?`,
+                [
+                    title,
+                    durationOption.optionLabel,
+                    durationOption.days,
+                    durationOption.planLabel,
+                    expiryDate,
+                    category,
+                    description,
+                    coverPath,
+                    courseId
+                ]
+            );
+        } catch (dbError) {
+            if (uploadedCoverUrl) {
+                await deleteCoverAssetByUrl(uploadedCoverUrl);
+            }
+            throw dbError;
+        }
 
-        if (coverPath !== existingCourse.cover_path) {
-            await deleteStoredFile(existingCourse.cover_path);
+        if (coverPath !== existingCourse.cover_path && existingCourse.cover_path) {
+            await deleteCoverAssetByUrl(existingCourse.cover_path);
         }
 
         return res.json({
@@ -2125,7 +2140,8 @@ app.put('/api/courses/:courseId', upload.fields([
         });
     } catch (error) {
         console.error('Error updating course:', error);
-        return res.status(500).json({ error: 'Failed to update course' });
+        const status = String(error.message || '').includes('Cloudinary upload is unavailable') ? 503 : 500;
+        return res.status(status).json({ error: status === 503 ? error.message : 'Failed to update course' });
     }
 });
 
@@ -2147,14 +2163,28 @@ app.post(['/courses', '/api/courses', '/submit-course'], upload.fields([
         }
 
         const hasVideo = req.files.video && req.files.video[0];
-        const coverPath = `/uploads/covers/${path.basename(req.files.cover[0].path)}`;
         const createdAt = new Date();
         const expiryDate = calculateExpiryDate(createdAt, durationOption.days);
+        let coverPath = null;
         let videoPath = null;
 
+        try {
+            const uploadedCover = await uploadCoverAsset(req.files.cover[0].path);
+            coverPath = uploadedCover.secure_url || uploadedCover.url;
+        } catch (coverError) {
+            console.error('Cover upload error:', coverError);
+            throw new Error(`Cloudinary cover upload failed: ${coverError.message}`);
+        }
+
         if (hasVideo) {
-            const uploadedVideo = await uploadVideoAsset(req.files.video[0].path);
-            videoPath = uploadedVideo.secure_url || uploadedVideo.url;
+            try {
+                const uploadedVideo = await uploadVideoAsset(req.files.video[0].path);
+                videoPath = uploadedVideo.secure_url || uploadedVideo.url;
+            } catch (videoError) {
+                await deleteCoverAssetByUrl(coverPath);
+                console.error('Video upload error:', videoError);
+                throw new Error(`Cloudinary video upload failed: ${videoError.message}`);
+            }
         }
 
         let courseId = null;
@@ -2196,7 +2226,7 @@ app.post(['/courses', '/api/courses', '/submit-course'], upload.fields([
                 await insertVideoRecord(courseId, `${title} - Main Video`, videoPath, createdAt);
             }
         } catch (dbError) {
-            await deleteStoredFile(coverPath);
+            await deleteCoverAssetByUrl(coverPath);
             if (videoPath) {
                 await deleteVideoAssetByUrl(videoPath);
             }

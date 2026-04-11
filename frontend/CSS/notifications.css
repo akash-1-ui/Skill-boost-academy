@@ -77,8 +77,8 @@ body[data-role="student"] .chat-input-area {
 .chat-panel {
   background: linear-gradient(180deg, rgba(13, 25, 49, 0.98), rgba(6, 14, 28, 0.98));
   border: 1px solid rgba(73, 116, 202, 0.34);
-  border-radius: 28px;
-  box-shadow: 0 28px 60px rgba(2, 8, 23, 0.46);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(2, 8, 23, 0.28);
   overflow: hidden;
   backdrop-filter: blur(10px);
 }
@@ -100,8 +100,9 @@ body[data-role="student"] .chat-input-area {
 .conversation-item h3,
 .chat-header h2 {
   margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
-  letter-spacing: 0.01em;
+  font-family: 'Poppins', 'Segoe UI', sans-serif;
+  letter-spacing: 0.02em;
+  font-weight: 700;
 }
 
 .panel-header h2 {
@@ -121,11 +122,11 @@ body[data-role="student"] .chat-input-area {
   flex: 1;
   padding: 12px 14px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: 6px;
   background: transparent;
   color: var(--ink-soft);
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 0.93rem;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
@@ -156,42 +157,43 @@ body[data-role="student"] .chat-input-area {
 
 .conversation-item {
   width: 100%;
-  padding: 18px 18px 16px;
+  padding: 16px 14px;
   border: 1px solid var(--line);
-  border-radius: 22px;
-  background:
-    linear-gradient(150deg, rgba(10, 20, 44, 0.96), rgba(6, 14, 32, 0.96));
-  box-shadow: var(--shadow-soft);
+  border-radius: 8px;
+  background: rgba(10, 20, 44, 0.6);
+  box-shadow: none;
   cursor: pointer;
   text-align: left;
   font: inherit;
   color: inherit;
-  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
 }
 
 .conversation-item:hover {
-  transform: translateY(-2px);
+  transform: translateY(0px);
   border-color: var(--line-strong);
-  box-shadow: 0 18px 34px rgba(35, 50, 70, 0.12);
+  background: rgba(10, 20, 44, 0.8);
+  box-shadow: none;
 }
 
 .conversation-item.active {
-  background:
-    linear-gradient(135deg, rgba(20, 70, 189, 0.98), rgba(33, 120, 255, 0.94));
-  border-color: transparent;
-  box-shadow: 0 20px 36px rgba(15, 79, 224, 0.28);
+  background: rgba(20, 70, 189, 0.88);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: none;
 }
 
 .conversation-item h3 {
-  font-size: 1.15rem;
+  font-size: 1rem;
   color: var(--navy);
+  font-weight: 700;
+  margin-bottom: 4px;
 }
 
 .conversation-item p {
-  margin: 8px 0 0;
+  margin: 0;
   color: var(--ink-soft);
-  font-size: 0.9rem;
-  line-height: 1.55;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 .conversation-item.active h3,
@@ -256,56 +258,58 @@ body[data-role="student"] .chat-input-area {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 44px;
-  padding: 10px 16px;
+  min-height: 40px;
+  padding: 10px 14px;
   border: 1px solid rgba(96, 165, 250, 0.26);
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(31, 47, 85, 0.96), rgba(16, 27, 50, 0.98));
+  border-radius: 6px;
+  background: rgba(31, 47, 85, 0.6);
   color: var(--navy);
   font: inherit;
-  font-size: 0.94rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: var(--shadow-soft);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .back-link-button:hover {
-  transform: translateY(calc(-50% - 1px));
+  transform: translateY(-50%);
   border-color: rgba(112, 167, 255, 0.42);
-  box-shadow: 0 16px 28px rgba(15, 79, 224, 0.22);
+  background: rgba(31, 47, 85, 0.8);
+  box-shadow: none;
 }
 
 .theme-toggle {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
-  padding: 8px 14px 8px 10px;
+  min-height: 40px;
+  padding: 8px 12px 8px 10px;
   border: 1px solid rgba(96, 165, 250, 0.24);
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(31, 47, 85, 0.96), rgba(16, 27, 50, 0.98));
+  border-radius: 6px;
+  background: rgba(31, 47, 85, 0.6);
   color: var(--navy);
   font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: var(--shadow-soft);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .theme-toggle:hover {
-  transform: translateY(-1px);
+  transform: translateY(0px);
   border-color: rgba(112, 167, 255, 0.42);
-  box-shadow: 0 16px 28px rgba(15, 79, 224, 0.18);
+  background: rgba(31, 47, 85, 0.8);
+  box-shadow: none;
 }
 
 .theme-toggle-track {
   position: relative;
   inline-size: 42px;
   block-size: 24px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(37, 99, 235, 0.86));
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.8);
   box-shadow: inset 0 1px 3px rgba(2, 8, 23, 0.32);
   flex-shrink: 0;
 }
@@ -397,23 +401,21 @@ body[data-role="student"] .chat-input-area {
   gap: 10px;
   max-width: min(68%, 700px);
   padding: 10px 12px;
-  border-radius: 16px;
+  border-radius: 6px;
   line-height: 1.45;
-  box-shadow: var(--shadow-soft);
+  box-shadow: none;
 }
 
 .message-bubble.instructor {
   align-self: flex-start;
-  background: linear-gradient(135deg, #0f4fe0, #2563eb);
+  background: rgba(15, 79, 224, 0.8);
   color: rgba(255, 255, 255, 0.98);
-  border-top-left-radius: 6px;
 }
 
 .message-bubble.student {
   align-self: flex-end;
-  background: linear-gradient(135deg, #101f40, #162d59);
+  background: rgba(16, 31, 64, 0.8);
   color: #e9f3ff;
-  border-top-right-radius: 6px;
   border: 1px solid rgba(96, 165, 250, 0.14);
 }
 
@@ -433,16 +435,15 @@ body[data-role="student"] .chat-input-area {
 
 .readonly-notice {
   margin: 0 30px 24px;
-  padding: 15px 18px;
+  padding: 14px 16px;
   border: 1px solid rgba(73, 116, 202, 0.28);
-  border-radius: 20px;
-  background:
-    linear-gradient(180deg, rgba(22, 34, 61, 0.96), rgba(12, 20, 38, 0.98));
+  border-radius: 6px;
+  background: rgba(22, 34, 61, 0.6);
   color: #9cc9ff;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   font-weight: 600;
   text-align: center;
-  box-shadow: 0 18px 34px rgba(2, 8, 23, 0.28);
+  box-shadow: none;
 }
 
 .chat-input-area {
@@ -460,15 +461,15 @@ body[data-role="student"] .chat-input-area {
 
 #messageInput {
   flex: 1;
-  min-height: 52px;
-  padding: 14px 18px;
+  min-height: 44px;
+  padding: 12px 14px;
   border: 1px solid rgba(96, 165, 250, 0.18);
-  border-radius: 999px;
-  background: rgba(5, 14, 32, 0.92);
+  border-radius: 6px;
+  background: rgba(5, 14, 32, 0.6);
   color: var(--ink);
   font: inherit;
-  font-size: 0.96rem;
-  box-shadow: inset 0 1px 2px rgba(2, 8, 23, 0.28);
+  font-size: 0.93rem;
+  box-shadow: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
@@ -490,32 +491,16 @@ body[data-role="student"] .chat-input-area {
 }
 
 .send-btn {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   border: none;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border-radius: 6px;
+  background: #3b82f6;
   color: #fff;
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   cursor: pointer;
-  box-shadow: 0 14px 26px rgba(29, 78, 216, 0.3);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
-}
-
-.send-btn:hover:not(:disabled) {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow: 0 18px 30px rgba(29, 78, 216, 0.4);
-  filter: saturate(1.05);
-}
-
-.send-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.send-btn:disabled {
-  cursor: not-allowed;
-  background: linear-gradient(135deg, #223453, #1a2942);
   box-shadow: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;\n}\n\n.send-btn:hover:not(:disabled) {\n  transform: translateY(0px);\n  box-shadow: none;\n  background: #2563eb;\n}\n\n.send-btn:active:not(:disabled) {\n  transform: scale(0.98);\n}\n\n.send-btn:disabled {\n  cursor: not-allowed;\n  background: #3a4a5f;\n  box-shadow: none;
 }
 
 .empty-state {
@@ -527,13 +512,14 @@ body[data-role="student"] .chat-input-area {
 
 .empty-state-text {
   max-width: 280px;
-  padding: 18px 20px;
+  padding: 16px 18px;
   border: 1px dashed rgba(96, 165, 250, 0.24);
-  border-radius: 20px;
+  border-radius: 6px;
   background: rgba(7, 16, 36, 0.88);
   color: var(--ink-soft);
   text-align: center;
-  line-height: 1.65;
+  line-height: 1.6;
+  font-size: 0.93rem;
 }
 
 .loading {
@@ -603,9 +589,10 @@ body[data-role="student"] .back-link-button:hover {
 }
 
 body[data-role="student"] .conversation-item h3 {
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 1.06rem;
+  font-family: 'Poppins', 'Segoe UI', sans-serif;
+  font-size: 1rem;
   color: #edf3ff;
+  font-weight: 700;
 }
 
 body[data-role="student"] .conversation-item p {
@@ -624,12 +611,9 @@ body[data-role="student"] .conversation-item {
   position: relative;
   overflow: hidden;
   border-color: rgba(112, 156, 255, 0.16);
-  border-radius: 20px;
-  background:
-    linear-gradient(180deg, rgba(28, 45, 79, 0.98), rgba(10, 19, 37, 0.98));
-  box-shadow:
-    0 18px 36px rgba(2, 7, 18, 0.34),
-    inset 0 1px 0 rgba(229, 239, 255, 0.03);
+  border-radius: 8px;
+  background: rgba(28, 45, 79, 0.7);
+  box-shadow: none;
 }
 
 body[data-role="student"] .conversation-item::before {
@@ -670,13 +654,13 @@ body[data-role="student"] .message-group {
 
 body[data-role="student"] .message-sender-name {
   padding: 0 2px;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 0.96rem;
+  font-family: 'Poppins', 'Segoe UI', sans-serif;
+  font-size: 0.8rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: none;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: #a8d5ff;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+  text-shadow: none;
 }
 
 body[data-role="student"] .message-bubble.instructor {
@@ -687,15 +671,12 @@ body[data-role="student"] .message-bubble.instructor {
   gap: 6px;
   width: fit-content;
   max-width: 100%;
-  padding: 15px 18px 13px;
-  border-radius: 18px 18px 18px 8px;
+  padding: 12px 14px 12px;
+  border-radius: 6px;
   align-self: flex-start;
-  background:
-    linear-gradient(180deg, rgba(32, 49, 83, 0.98), rgba(12, 21, 38, 0.99));
+  background: rgba(32, 49, 83, 0.7);
   border: 1px solid rgba(112, 156, 255, 0.18);
-  box-shadow:
-    0 18px 34px rgba(2, 7, 18, 0.34),
-    inset 0 1px 0 rgba(229, 239, 255, 0.04);
+  box-shadow: none;
 }
 
 body[data-role="student"] .message-bubble.instructor::before {

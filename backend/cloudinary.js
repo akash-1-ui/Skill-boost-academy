@@ -115,6 +115,32 @@ function extractCloudinaryPublicId(videoUrl) {
     }
 }
 
+async function uploadCoverAsset(filePath, options = {}) {
+    const status = getCloudinaryStatus();
+    if (!status.ready) {
+        if (options.removeLocalFile !== false) {
+            await removeTemporaryFile(filePath);
+        }
+        throw new Error(`Cloudinary upload is unavailable: ${status.reason}`);
+    }
+
+    try {
+        const result = await cloudinaryModule.uploader.upload(filePath, {
+            resource_type: 'image',
+            folder: options.folder || process.env.CLOUDINARY_COVER_FOLDER || 'skillboost/covers',
+            use_filename: true,
+            unique_filename: true,
+            overwrite: false
+        });
+
+        return result;
+    } finally {
+        if (options.removeLocalFile !== false) {
+            await removeTemporaryFile(filePath);
+        }
+    }
+}
+
 async function deleteVideoAssetByUrl(videoUrl) {
     if (!videoUrl) {
         return { result: 'skipped' };
@@ -136,10 +162,33 @@ async function deleteVideoAssetByUrl(videoUrl) {
     });
 }
 
+async function deleteCoverAssetByUrl(coverUrl) {
+    if (!coverUrl) {
+        return { result: 'skipped' };
+    }
+
+    const publicId = extractCloudinaryPublicId(coverUrl);
+    if (!publicId) {
+        return { result: 'skipped' };
+    }
+
+    const status = getCloudinaryStatus();
+    if (!status.ready) {
+        return { result: 'skipped', reason: status.reason };
+    }
+
+    return cloudinaryModule.uploader.destroy(publicId, {
+        resource_type: 'image',
+        invalidate: true
+    });
+}
+
 module.exports = {
     getCloudinaryStatus,
     isCloudinaryReady,
     uploadVideoAsset,
+    uploadCoverAsset,
     deleteVideoAssetByUrl,
+    deleteCoverAssetByUrl,
     extractCloudinaryPublicId
 };

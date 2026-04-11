@@ -4,6 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Student Profile</title>
+  <script>
+    (() => {
+      try {
+        document.documentElement.setAttribute('data-theme', 'light');
+      } catch (error) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -55,6 +64,7 @@
 </div>
 
 <script src="../js/app-config.js"></script>
+<script src="../js/theme_mode.js"></script>
 <script>
   const buildApiUrl = window.SkillBoostApp?.buildApiUrl || ((path = '') => `${window.location.origin}${String(path || '').startsWith('/') ? path : `/${path}`}`);
   const DEFAULT_PROFILE_PHOTO = '/uploads/default-avatar.svg';

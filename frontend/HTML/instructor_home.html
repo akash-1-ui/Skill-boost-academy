@@ -765,22 +765,42 @@
             let value = String(rawPath).trim();
             if (!value) return '';
             value = value.replace(/\\/g, '/');
-            if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:') || value.startsWith('blob:')) {
+            
+            // Handle data URLs and blob URLs as-is
+            if (value.startsWith('data:') || value.startsWith('blob:')) {
                 return value;
             }
-
+            
+            // If it's a Cloudinary URL, return it directly (valid across all environments)
+            if (value.includes('res.cloudinary.com')) {
+                return value;
+            }
+            
             const base = API_BASE || window.location.origin;
             const normalizedFallback = fallbackBase.startsWith('/') ? fallbackBase : `/${fallbackBase}`;
-
+            
+            // If it's an external URL (http/https), extract just the filename and use current API base
+            if (value.startsWith('http://') || value.startsWith('https://')) {
+                const filename = value.split('/').pop();
+                if (filename) {
+                    return `${base}${normalizedFallback}/${filename}`;
+                }
+                // Fallback if no filename found
+                return value;
+            }
+            
+            // Handle Windows paths
             if (/^[a-zA-Z]:\//.test(value)) {
                 const filename = value.split('/').pop();
                 return `${base}${normalizedFallback}/${filename}`;
             }
-
+            
+            // Handle absolute paths
             if (value.startsWith('/')) {
                 return `${base}${value}`;
             }
-
+            
+            // Handle relative paths
             return `${base}${normalizedFallback}/${value}`;
         }
 

@@ -147,8 +147,8 @@ body {
   border: 1px solid #cbd5f5;
   border-radius: 10px;
   font-size: 1rem;
-  background: #f8fafc;
-  color: var(--ink);
+  background: #ffffff;
+  color: #102345;
 }
 
 .form-group input:focus,
@@ -184,4 +184,30 @@ body {
   .container {
     margin: 20px auto;
   }
+}
+
+/* Light Theme Form Field Overrides */
+html[data-theme="light"] .form-group label {
+  color: #102345 !important;
+  font-weight: 600;
+}
+
+html[data-theme="light"] .form-group input,
+html[data-theme="light"] .form-group textarea {
+  border: 1px solid rgba(96, 165, 250, 0.3) !important;
+  background: #ffffff !important;
+  color: #102345 !important;
+}
+
+html[data-theme="light"] .form-group input::placeholder,
+html[data-theme="light"] .form-group textarea::placeholder {
+  color: rgba(16, 35, 69, 0.6) !important;
+}
+
+html[data-theme="light"] .form-group input:focus,
+html[data-theme="light"] .form-group textarea:focus {
+  outline: none !important;
+  border-color: rgba(59, 130, 246, 0.6) !important;
+  box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.25) !important;
+  background: #ffffff !important;
 }
