@@ -25,21 +25,10 @@
 <body data-app-role="access">
     <nav class="topbar" id="portalTopbar">
         <div class="topbar-inner">
-            <a class="brand" href="index.html">Skill Boost Nexus</a>
+            <a class="brand" href="index.html">Skill Boost <span class="brand-accent">Nexus</span></a>
             <div class="topbar-actions">
-                <button
-                    type="button"
-                    class="theme-toggle"
-                    id="accessThemeToggle"
-                    data-theme-toggle
-                    data-theme-role="access">
-                    <span class="theme-toggle-track" aria-hidden="true">
-                        <span class="theme-toggle-thumb"></span>
-                    </span>
-                    <span class="theme-toggle-text" data-theme-label>Day Mode</span>
-                </button>
-                <button id="workspaceLink" class="topbar-btn" onclick="window.location.href='index.html'">Workspace</button>
-                <button id="registerModalButton" type="button" class="topbar-btn" data-open-modal="registerModal">Register</button>
+                <button id="workspaceLink" class="topbar-btn secondary" onclick="window.location.href='index.html'">Workspace</button>
+                <button id="registerModalButton" type="button" class="topbar-btn secondary" data-open-modal="registerModal">Register</button>
                 <button id="loginModalButton" type="button" class="topbar-btn secondary" data-open-modal="loginModal">Login</button>
                 <span id="sessionBadge" class="session-badge" hidden>Admin Session Active</span>
             </div>
@@ -47,205 +36,21 @@
     </nav>
 
     <header id="accessHero" class="hero">
-        <div class="hero-copy">
-            <div class="hero-chip-row">
-                <span class="hero-chip">Academy Access Portal</span>
-                <span class="hero-chip hero-chip-muted">Admin Command Layer</span>
-            </div>
-            <p class="eyebrow">Academy Access Portal</p>
-            <p class="hero-title">Create an academy control center that feels ready before the first invite is shared.</p>
-            <p class="hero-text">
-                Register once to generate a name-based academy access code, activate the right plan, and manage
-                instructor and student capacity from one premium owner dashboard.
-            </p>
-            <div class="hero-actions">
-                <button type="button" class="primary-btn auth-action-btn" data-open-modal="registerModal">Create Workspace</button>
-                <button type="button" class="primary-btn auth-action-btn" data-open-modal="loginModal">Open Dashboard</button>
-            </div>
-            <div class="hero-signal-bar">
-                <article class="hero-signal">
-                    <strong>Code-first onboarding</strong>
-                    <span>One academy code for secure student and instructor entry.</span>
-                </article>
-                <article class="hero-signal">
-                    <strong>Hosted-ready sharing</strong>
-                    <span>Copy the live join link and keep it aligned with your deployed site path.</span>
-                </article>
-                <article class="hero-signal">
-                    <strong>Admin seat control</strong>
-                    <span>Track limits, upgrades, and user access from one clean command space.</span>
-                </article>
-            </div>
-        </div>
-
-        <div class="hero-panel">
-            <div class="hero-panel-shell">
-
-                <div class="hero-preview-grid">
-                    <article class="hero-preview-card hero-preview-card-wide">
-                        <span class="hero-preview-label">Access Code Pattern</span>
-                        <strong>SKILL-ACADEMY-XXXX</strong>
-                        <p>Branded code creation with one place to copy and share the join link.</p>
-                    </article>
-
-                    <article class="hero-preview-card">
-                        <span class="hero-preview-label">Seat Radar</span>
-                        <strong>Instructors + Students</strong>
-                        <p>Watch live usage before limits block new logins.</p>
-                    </article>
-
-                    <article class="hero-preview-card">
-                        <span class="hero-preview-label">Plan Switching</span>
-                        <strong>Basic, Pro, Advanced</strong>
-                        <p>Upgrade cleanly and reuse paid plans when available.</p>
-                    </article>
-
-                    <article class="hero-preview-card hero-preview-route">
-                        <span class="hero-preview-label">Command Flow</span>
-                        <div class="hero-route-steps">
-                            <span>Register</span>
-                            <span>Activate</span>
-                            <span>Share</span>
-                            <span>Monitor</span>
-                        </div>
-                        <p class="hero-route-copy">Every owner action moves through one clean loop from workspace setup to live access control.</p>
-                       
-                       
-                       
-                       
-                       
-                    </article>
-                </div>
-            </div>
-            <span class="hero-orbit hero-orbit-a" aria-hidden="true"></span>
-            <span class="hero-orbit hero-orbit-b" aria-hidden="true"></span>
+        <div class="hero-image" aria-hidden="true"></div>
+        <div class="hero-content">
+            <p class="eyebrow hero-eyebrow">Admin Access Portal</p>
+            <h2>Manage your academy from one clear access point.</h2>
+            <ul class="feature-list" aria-label="Portal features">
+                <li class="feature-point">Create Workspace in few minutes.</li>
+                <li class="feature-point">Easy to manage plans, payments, Admin access.</li>
+                <li class="feature-point">Register & login to Experience the portal. </li>
+            </ul>
         </div>
     </header>
 
     <main class="container">
-        <section id="authSection" class="auth-section">
-            <section class="surface access-command-stage">
-                <div class="section-heading">
-                    <p class="eyebrow">Admin Experience</p>
-                    <h2>Everything the academy owner needs lives in one confident workflow.</h2>
-                    <p>From first-time registration to plan changes and access restriction, the portal stays focused on speed, clarity, and control.</p>
-                </div>
-
-                <div class="access-command-grid">
-                    <article class="access-flow-card">
-                        <span class="access-flow-step">01</span>
-                        <strong>Launch the academy workspace</strong>
-                        <p>Create the owner account and generate an academy access identity tied to your brand.</p>
-                    </article>
-
-                    <article class="access-flow-card">
-                        <span class="access-flow-step">02</span>
-                        <strong>Activate the right plan</strong>
-                        <p>Choose seat capacity for instructors and students without leaving the owner dashboard.</p>
-                    </article>
-
-                    <article class="access-flow-card">
-                        <span class="access-flow-step">03</span>
-                        <strong>Share one join path</strong>
-                        <p>Copy the live hosted join link and let both roles enter through the same clean flow.</p>
-                    </article>
-
-                    <article class="access-flow-card">
-                        <span class="access-flow-step">04</span>
-                        <strong>Monitor and adjust access</strong>
-                        <p>Search active users, review last login activity, and restrict unused accounts when needed.</p>
-                    </article>
-                </div>
-            </section>
-
-            <div class="auth-grid access-story-grid">
-                <article class="surface access-story-card">
-                    <p class="eyebrow">Control Layer</p>
-                    <h3>Admin-only controls stay visible, readable, and fast to act on.</h3>
-                    <p class="card-copy">The portal is built so academy owners can manage access without digging through extra screens.</p>
-
-                    <ul class="access-bullet-list">
-                        <li>Name-based academy access code generation at registration time.</li>
-                        <li>One join link that works for instructors and students.</li>
-                        <li>Live seat awareness before plans hit their limit.</li>
-                        <li>Monitoring tools to search, review, restrict, and allow access again.</li>
-                    </ul>
-
-                    <div class="access-inline-metrics">
-                        <div class="access-inline-metric">
-                            <span>Admin action</span>
-                            <strong>Instant setup</strong>
-                        </div>
-                        <div class="access-inline-metric">
-                            <span>Sharing model</span>
-                            <strong>Single link</strong>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="surface access-preview-card">
-                    <div class="access-preview-ribbon">
-                        <span>What the portal feels like</span>
-                        <strong>Clear premium  organized</strong>
-                    </div>
-
-                    <div class="access-preview-stack">
-                        <article>
-                            <span>Identity</span>
-                            <strong>Academy-first setup</strong>
-                            <p>Start with your academy name and owner credentials.</p>
-                        </article>
-
-                        <article>
-                            <span>Capacity</span>
-                            <strong>Seats and upgrades</strong>
-                            <p>See plan fit before new registrations start getting blocked.</p>
-                        </article>
-
-                        <article>
-                            <span>Authority</span>
-                            <strong>Access management</strong>
-                            <p>Restrict inactive accounts and reopen them when needed.</p>
-                        </article>
-                    </div>
-                </article>
-            </div>
-
-            <section class="surface access-pillar-section">
-                <div class="section-heading">
-                    <p class="eyebrow">Portal Highlights</p>
-                    <h2>A smarter access page with more signal and less dead space.</h2>
-                    <p>The workflow stays familiar, but the page now feels more like a real product surface than a plain entry screen.</p>
-                </div>
-
-                <div class="access-pillar-grid">
-                    <article class="access-pillar-card">
-                        <span>Unified access</span>
-                        <strong>One portal, one owner dashboard, one shareable join route.</strong>
-                        <p>Students and instructors still enter with the right role, but the owner manages everything from a single surface.</p>
-                    </article>
-
-                    <article class="access-pillar-card">
-                        <span>Subscription clarity</span>
-                        <strong>Plans feel like product choices instead of basic cards.</strong>
-                        <p>Basic, Pro, and Advanced stay easy to compare, activate, and upgrade.</p>
-                    </article>
-
-                    <article class="access-pillar-card">
-                        <span>Live monitoring</span>
-                        <strong>Find users faster with search and fixed monitoring layouts.</strong>
-                        <p>The dashboard stays stable even when more people join with your academy code.</p>
-                    </article>
-
-                    <article class="access-pillar-card">
-                        <span>Hosted-ready sharing</span>
-                        <strong>Join links follow the deployed site path automatically.</strong>
-                        <p>When you host the project, copied join links point to the hosted page instead of localhost.</p>
-                    </article>
-                </div>
-            </section>
-        </section>
-
+        <!-- Modals only - removed verbose content sections -->
+        
         <!-- Register Modal -->
         <div id="registerModal" class="modal" hidden>
             <div class="modal-backdrop"></div>
