@@ -146,11 +146,38 @@ app.get('/api/health', (req, res) => {
             hasCloudinaryCloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
             hasCloudinaryApiKey: !!process.env.CLOUDINARY_API_KEY,
             hasCloudinaryApiSecret: !!process.env.CLOUDINARY_API_SECRET,
-            databaseUrl: !!process.env.DATABASE_URL
+            databaseUrl: !!process.env.DATABASE_URL,
+            hasMongoUri: mongoStore.isMongoEnabled(),
+            mongoDbName: String(process.env.MONGODB_DB || process.env.DB_NAME || '').trim() || null
         }
     };
     
     res.status(cloudinaryStatus.ready ? 200 : 503).json(status);
+});
+
+app.get('/api/health/mongo', async (req, res) => {
+    if (!mongoStore.isMongoEnabled()) {
+        return res.status(503).json({
+            success: false,
+            mongo: 'disabled',
+            message: 'MONGODB_URI is not configured'
+        });
+    }
+
+    try {
+        await mongoStore.pingMongo();
+        return res.json({
+            success: true,
+            mongo: 'ok',
+            database: String(process.env.MONGODB_DB || process.env.DB_NAME || 'skill_boost_nexus').trim()
+        });
+    } catch (error) {
+        return res.status(error.status || 503).json({
+            success: false,
+            mongo: 'error',
+            message: error.message
+        });
+    }
 });
 
 function asPositiveInt(value) {
@@ -4193,7 +4220,7 @@ async function initializeAccessTables() {
 if (!mongoStore.isMongoEnabled()) {
     initializeAccessTables().catch(err => console.error('Failed to initialize access tables:', err));
 } else {
-    mongoStore.getMongoDb()
+    mongoStore.getMongoDbWithTimeout()
         .then(() => console.log('MongoDB access collections verified/created'))
         .catch((err) => console.error('Failed to initialize MongoDB access collections:', err));
 }
@@ -5438,11 +5465,12 @@ async function handleMongoAccessRoutes(req, res, next) {
         return next();
     }
 
-    const mongoDb = await mongoStore.getMongoDb();
     const routePath = req.path.replace(/\/+$/, '') || '/';
     const now = new Date();
 
     try {
+        const mongoDb = await mongoStore.getMongoDbWithTimeout();
+
         if (req.method === 'POST' && routePath === '/register') {
             const customerName = String(req.body.customer_name || req.body.name || '').trim();
             const customerEmail = normalizeCustomerEmail(req.body.customer_email || req.body.email);

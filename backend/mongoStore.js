@@ -39,6 +39,24 @@ function isMongoEnabled() {
     return /^mongodb(\+srv)?:\/\//i.test(getMongoUri());
 }
 
+function withTimeout(promise, timeoutMs, message) {
+    let timeoutId = null;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            const error = new Error(message || 'MongoDB operation timed out');
+            error.status = 503;
+            reject(error);
+        }, timeoutMs);
+    });
+
+    return Promise.race([promise, timeoutPromise])
+        .finally(() => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+        });
+}
+
 let clientPromise = null;
 let databasePromise = null;
 
@@ -65,6 +83,24 @@ async function getMongoDb() {
     }
 
     return databasePromise;
+}
+
+async function getMongoDbWithTimeout(timeoutMs = Number(process.env.MONGO_CONNECT_TIMEOUT_MS || 10000)) {
+    return withTimeout(
+        getMongoDb(),
+        timeoutMs,
+        'MongoDB is taking too long to respond. Check the Atlas URI, database user, and Network Access allowlist.'
+    );
+}
+
+async function pingMongo(timeoutMs = Number(process.env.MONGO_CONNECT_TIMEOUT_MS || 10000)) {
+    const db = await getMongoDbWithTimeout(timeoutMs);
+    await withTimeout(
+        db.command({ ping: 1 }),
+        timeoutMs,
+        'MongoDB ping timed out. Check Atlas Network Access and cluster status.'
+    );
+    return true;
 }
 
 async function ensureMongoIndexes(db) {
@@ -113,9 +149,11 @@ async function listPlans() {
 module.exports = {
     DEFAULT_PLANS,
     getMongoDb,
+    getMongoDbWithTimeout,
     getMongoUri,
     getPlan,
     isMongoEnabled,
     listPlans,
-    nextSequence
+    nextSequence,
+    pingMongo
 };
