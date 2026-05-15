@@ -85,7 +85,8 @@
 
   const explicitApiBase = resolveExplicitApiBase();
   const currentOrigin = normalizeOrigin(window.location.origin);
-  const isLocalHost = LOCAL_HOSTS.has(window.location.hostname);
+  const isLocalFile = window.location.protocol === 'file:';
+  const isLocalHost = isLocalFile || LOCAL_HOSTS.has(window.location.hostname);
   const deployedApiBase = normalizeOrigin(DEPLOYED_BACKEND_ORIGIN);
   const shouldProxyApiThroughCurrentOrigin = !isLocalHost
     && hasHostnameSuffix(window.location.hostname, SAME_ORIGIN_API_HOST_SUFFIXES)

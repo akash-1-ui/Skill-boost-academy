@@ -1,19 +1,75 @@
 const mysql = require('mysql2');
 
-const databaseName = process.env.DB_NAME || 'course_registration';
+function readDatabaseUrl() {
+    return String(
+        process.env.DATABASE_URL ||
+        process.env.MYSQL_URL ||
+        process.env.MYSQL_URI ||
+        ''
+    ).trim();
+}
 
-const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '@inspiron16H',
-    database: databaseName,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    connectTimeout: 20000,
-    enableKeepAlive: true
-});
+function isMongoMode() {
+    return /^mongodb(\+srv)?:\/\//i.test(String(process.env.MONGODB_URI || process.env.MONGO_URI || '').trim());
+}
+
+function buildPoolConfig() {
+    const databaseUrl = readDatabaseUrl();
+
+    if (/^mongodb(\+srv)?:\/\//i.test(databaseUrl)) {
+        throw new Error('MongoDB connection strings are not supported by this SQL backend. Please provide a MySQL connection string or DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME values.');
+    }
+
+    if (databaseUrl) {
+        const parsedUrl = new URL(databaseUrl);
+        const databaseName = parsedUrl.pathname.replace(/^\/+/, '') || process.env.DB_NAME || 'course_registration';
+
+        return {
+            host: parsedUrl.hostname,
+            port: Number(parsedUrl.port || process.env.DB_PORT || 3306),
+            user: decodeURIComponent(parsedUrl.username || process.env.DB_USER || 'root'),
+            password: decodeURIComponent(parsedUrl.password || process.env.DB_PASSWORD || ''),
+            database: databaseName,
+            waitForConnections: true,
+            connectionLimit: 10,
+            queueLimit: 0,
+            connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS || 10000),
+            enableKeepAlive: true
+        };
+    }
+
+    return {
+        host: process.env.DB_HOST || 'localhost',
+        port: Number(process.env.DB_PORT || 3306),
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '@inspiron16H',
+        database: process.env.DB_NAME || 'course_registration',
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS || 10000),
+        enableKeepAlive: true
+    };
+}
+
+if (isMongoMode()) {
+    console.log('MongoDB mode enabled. MySQL pool is disabled.');
+    const disabledPool = {
+        async query() {
+            throw new Error('MySQL is disabled because MONGODB_URI is configured.');
+        },
+        async getConnection() {
+            throw new Error('MySQL is disabled because MONGODB_URI is configured.');
+        }
+    };
+
+    module.exports = disabledPool;
+    return;
+}
+
+const poolConfig = buildPoolConfig();
+const databaseName = poolConfig.database;
+const pool = mysql.createPool(poolConfig);
 
 // Test database connection
 pool.getConnection((err, connection) => {

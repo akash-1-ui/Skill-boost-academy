@@ -10,6 +10,7 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const mongoStore = require('./mongoStore');
 const {
     COURSE_DURATION_OPTIONS,
     DEFAULT_COURSE_DURATION_DAYS,
@@ -43,6 +44,7 @@ const RESET_OTP_MAX_ATTEMPTS = Number(process.env.RESET_OTP_MAX_ATTEMPTS || 5);
 const LOCAL_VIDEO_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const ACCESS_OWNER_JWT_SECRET = process.env.ACCESS_OWNER_JWT_SECRET || 'skillboostacademy-access-owner-secret';
 const PASSWORD_RESET_JWT_SECRET = process.env.PASSWORD_RESET_JWT_SECRET || 'skillboostacademy-password-reset-secret';
+const DB_CONNECTION_TIMEOUT_MS = Number(process.env.DB_CONNECTION_TIMEOUT_MS || 15000);
 const RAZORPAY_API_BASE = 'https://api.razorpay.com/v1';
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FRONTEND_ROOT = path.join(PROJECT_ROOT, 'frontend');
@@ -157,6 +159,29 @@ function asPositiveInt(value) {
         return null;
     }
     return n;
+}
+
+async function getConnectionWithTimeout(timeoutMs = DB_CONNECTION_TIMEOUT_MS) {
+    let timeoutId = null;
+
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            const error = new Error('Database connection timed out');
+            error.status = 503;
+            reject(error);
+        }, timeoutMs);
+    });
+
+    try {
+        return await Promise.race([
+            db.getConnection(),
+            timeoutPromise
+        ]);
+    } finally {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+    }
 }
 
 function hasMeaningfulDisplayName(value) {
@@ -1080,26 +1105,30 @@ async function initializeTables() {
     console.log('Application tables verified/created');
 }
 
-initializeTables()
-    .then(async () => {
-        scheduleCourseLifecycleJobs();
-        try {
-            const result = await runCourseLifecycleSweep();
-            console.log(`Initial course lifecycle sweep complete. warnings=${result.warningCount}, deleted=${result.deletedCount}`);
-        } catch (error) {
-            console.error('Initial course lifecycle sweep failed:', error);
-        }
+if (!mongoStore.isMongoEnabled()) {
+    initializeTables()
+        .then(async () => {
+            scheduleCourseLifecycleJobs();
+            try {
+                const result = await runCourseLifecycleSweep();
+                console.log(`Initial course lifecycle sweep complete. warnings=${result.warningCount}, deleted=${result.deletedCount}`);
+            } catch (error) {
+                console.error('Initial course lifecycle sweep failed:', error);
+            }
 
-        try {
-            const result = await migrateExistingVideosToCloudinary();
-            console.log(`Existing video Cloudinary migration complete. migrated=${result.migratedCount}, skipped=${result.skippedCount}, failed=${result.failedCount}`);
-        } catch (error) {
-            console.error('Existing video Cloudinary migration failed:', error);
-        }
-    })
-    .catch((err) => {
-        console.error('Error initializing application tables:', err);
-    });
+            try {
+                const result = await migrateExistingVideosToCloudinary();
+                console.log(`Existing video Cloudinary migration complete. migrated=${result.migratedCount}, skipped=${result.skippedCount}, failed=${result.failedCount}`);
+            } catch (error) {
+                console.error('Existing video Cloudinary migration failed:', error);
+            }
+        })
+        .catch((err) => {
+            console.error('Error initializing application tables:', err);
+        });
+} else {
+    console.log('Skipping MySQL table initialization because MongoDB mode is enabled.');
+}
 
 async function deleteStoredFile(publicPath) {
     if (!publicPath || typeof publicPath !== 'string') {
@@ -4161,7 +4190,13 @@ async function initializeAccessTables() {
     }
 }
 
-initializeAccessTables().catch(err => console.error('Failed to initialize access tables:', err));
+if (!mongoStore.isMongoEnabled()) {
+    initializeAccessTables().catch(err => console.error('Failed to initialize access tables:', err));
+} else {
+    mongoStore.getMongoDb()
+        .then(() => console.log('MongoDB access collections verified/created'))
+        .catch((err) => console.error('Failed to initialize MongoDB access collections:', err));
+}
 
 // Helper function to generate UUID
 function generateUUID() {
@@ -4221,12 +4256,17 @@ function getRazorpayCredentials() {
 function assertRazorpayConfigured() {
     const credentials = getRazorpayCredentials();
     if (!credentials.ready) {
-        const error = new Error('Razorpay live keys are not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to backend/.env.');
+        const error = new Error('Razorpay keys are not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to backend/.env.');
         error.status = 503;
         throw error;
     }
 
     return credentials;
+}
+
+function normalizeRazorpayErrorStatus(error) {
+    const status = Number(error?.status || error?.statusCode || 0);
+    return status === 401 ? 401 : (status || 500);
 }
 
 async function razorpayApiRequest(pathname, options = {}) {
@@ -4296,6 +4336,15 @@ function verifyRazorpaySignature(orderId, paymentId, signature) {
         Buffer.from(expectedSignature, 'utf8'),
         Buffer.from(normalizedSignature, 'utf8')
     );
+}
+
+function normalizeRazorpayAmount(value) {
+    const amount = Number(value);
+    if (!Number.isInteger(amount) || amount < 100) {
+        return null;
+    }
+
+    return amount;
 }
 
 function formatLegacyPlanName(planName) {
@@ -4834,6 +4883,8 @@ async function logAccessAttempt(academyId, type, status, reason, email, connecti
     }
 }
 
+app.use('/api/access', handleMongoAccessRoutes);
+
 // ACCESS OWNER - Register academy owner and starter academy
 app.post('/api/access/register', async (req, res) => {
     const customerName = String(req.body.customer_name || req.body.name || '').trim();
@@ -4849,9 +4900,10 @@ app.post('/api/access/register', async (req, res) => {
         });
     }
 
-    const connection = await db.getConnection();
+    let connection = null;
 
     try {
+        connection = await getConnectionWithTimeout();
         await connection.beginTransaction();
 
         const [existingCustomers] = await connection.query(
@@ -4930,15 +4982,21 @@ app.post('/api/access/register', async (req, res) => {
             summary: buildAccessOwnerSummary(req, context)
         });
     } catch (error) {
-        await connection.rollback();
+        if (connection) {
+            await connection.rollback();
+        }
         console.error('Access owner registration error:', error);
-        return res.status(500).json({
+        return res.status(error.status || 500).json({
             success: false,
-            message: 'Failed to register access owner',
+            message: error.status === 503
+                ? 'The database is taking too long to respond. Please try again in a moment.'
+                : 'Failed to register access owner',
             error: error.message
         });
     } finally {
-        connection.release();
+        if (connection) {
+            connection.release();
+        }
     }
 });
 
@@ -5299,6 +5357,416 @@ async function handleAccessMemberStatusUpdate(req, res) {
     }
 }
 
+async function getMongoAccessOwnerContext(customerId, academyId = null) {
+    const mongoDb = await mongoStore.getMongoDb();
+    const customer = await mongoDb.collection('customers').findOne({ id: Number(customerId) });
+    if (!customer) {
+        return null;
+    }
+
+    const academyQuery = { customer_id: Number(customer.id) };
+    if (academyId) {
+        academyQuery.id = String(academyId);
+    }
+
+    const academy = await mongoDb.collection('academies').findOne(academyQuery, { sort: { created_at: -1, id: -1 } });
+    if (!academy) {
+        return null;
+    }
+
+    const plan = await mongoDb.collection('plans').findOne({ id: Number(academy.plan_id || 1) }) || {};
+    return {
+        customer_id: Number(customer.id),
+        customer_name: customer.name,
+        customer_email: customer.email,
+        customer_phone: customer.phone || '',
+        password_hash: customer.password_hash,
+        customer_status: customer.status || 'active',
+        academy_id: academy.id,
+        academy_name: academy.academy_name,
+        access_code: academy.access_code,
+        academy_status: academy.status || 'active',
+        plan_id: Number(academy.plan_id || 1),
+        plan_activated_at: academy.plan_activated_at || null,
+        plan_expires_at: academy.plan_expires_at || null,
+        academy_created_at: academy.created_at,
+        academy_updated_at: academy.updated_at,
+        plan_name: plan.name || 'Basic',
+        max_instructors: Number(plan.max_instructors || 0),
+        max_students: Number(plan.max_students || 0),
+        plan_price: Number(plan.price || 0),
+        plan_description: plan.description || ''
+    };
+}
+
+async function generateUniqueMongoAccessCode(academyName = '') {
+    const mongoDb = await mongoStore.getMongoDb();
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+        const candidate = generateAccessCode(academyName);
+        const existing = await mongoDb.collection('academies').findOne({ access_code: candidate }, { projection: { id: 1 } });
+        if (!existing) {
+            return candidate;
+        }
+    }
+
+    throw new Error('Unable to generate a unique access code');
+}
+
+async function mongoAccessOwnerAuth(req, res) {
+    const authorization = String(req.headers.authorization || '').trim();
+    if (!authorization.startsWith('Bearer ')) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return null;
+    }
+
+    try {
+        const payload = jwt.verify(authorization.slice('Bearer '.length).trim(), ACCESS_OWNER_JWT_SECRET);
+        const context = await getMongoAccessOwnerContext(payload.customer_id, payload.academy_id);
+        if (!context) {
+            res.status(401).json({ success: false, message: 'Access owner session is no longer valid' });
+            return null;
+        }
+        return context;
+    } catch (error) {
+        res.status(401).json({ success: false, message: 'Invalid or expired session' });
+        return null;
+    }
+}
+
+async function handleMongoAccessRoutes(req, res, next) {
+    if (!mongoStore.isMongoEnabled()) {
+        return next();
+    }
+
+    const mongoDb = await mongoStore.getMongoDb();
+    const routePath = req.path.replace(/\/+$/, '') || '/';
+    const now = new Date();
+
+    try {
+        if (req.method === 'POST' && routePath === '/register') {
+            const customerName = String(req.body.customer_name || req.body.name || '').trim();
+            const customerEmail = normalizeCustomerEmail(req.body.customer_email || req.body.email);
+            const phone = String(req.body.phone || '').trim();
+            const password = String(req.body.password || '');
+            const academyName = String(req.body.academy_name || req.body.academyName || '').trim();
+
+            if (!customerName || !customerEmail || !password || !academyName) {
+                return res.status(400).json({ success: false, message: 'Academy name, customer name, email, and password are required' });
+            }
+
+            let customer = await mongoDb.collection('customers').findOne({ email: customerEmail });
+            if (customer?.password_hash) {
+                return res.status(409).json({ success: false, message: 'This customer already has access owner credentials. Please login instead.' });
+            }
+
+            const passwordHash = await bcrypt.hash(password, 10);
+            if (!customer) {
+                customer = {
+                    id: await mongoStore.nextSequence('customers'),
+                    name: customerName,
+                    email: customerEmail,
+                    phone: phone || '',
+                    password_hash: passwordHash,
+                    status: 'active',
+                    created_at: now,
+                    updated_at: now
+                };
+                await mongoDb.collection('customers').insertOne(customer);
+            } else {
+                await mongoDb.collection('customers').updateOne(
+                    { id: Number(customer.id) },
+                    { $set: { name: customerName, phone: phone || '', password_hash: passwordHash, status: 'active', updated_at: now } }
+                );
+                customer = await mongoDb.collection('customers').findOne({ id: Number(customer.id) });
+            }
+
+            let academy = await mongoDb.collection('academies').findOne({ customer_id: Number(customer.id) }, { sort: { created_at: -1 } });
+            if (!academy) {
+                academy = {
+                    id: generateUUID(),
+                    customer_id: Number(customer.id),
+                    plan_id: 1,
+                    academy_name: academyName,
+                    access_code: await generateUniqueMongoAccessCode(academyName),
+                    status: 'active',
+                    instructor_count: 0,
+                    student_count: 0,
+                    created_at: now,
+                    updated_at: now
+                };
+                await mongoDb.collection('academies').insertOne(academy);
+            }
+
+            const context = await getMongoAccessOwnerContext(customer.id, academy.id);
+            return res.status(201).json({
+                success: true,
+                message: 'Access owner registered successfully',
+                token: signAccessOwnerToken(context),
+                summary: buildAccessOwnerSummary(req, context)
+            });
+        }
+
+        if (req.method === 'POST' && routePath === '/login') {
+            const customerEmail = normalizeCustomerEmail(req.body.customer_email || req.body.email);
+            const password = String(req.body.password || '');
+            if (!customerEmail || !password) {
+                return res.status(400).json({ success: false, message: 'Email and password are required' });
+            }
+
+            const customer = await mongoDb.collection('customers').findOne({ email: customerEmail });
+            if (!customer?.password_hash || !(await bcrypt.compare(password, customer.password_hash))) {
+                return res.status(401).json({ success: false, message: 'Invalid credentials' });
+            }
+
+            const context = await getMongoAccessOwnerContext(customer.id);
+            if (!context) {
+                return res.status(404).json({ success: false, message: 'No academy workspace found for this account' });
+            }
+
+            return res.json({
+                success: true,
+                message: 'Login successful',
+                token: signAccessOwnerToken(context),
+                summary: buildAccessOwnerSummary(req, context)
+            });
+        }
+
+        const accessOwner = await mongoAccessOwnerAuth(req, res);
+        if (!accessOwner) {
+            return;
+        }
+
+        if (req.method === 'GET' && routePath === '/me') {
+            return res.json({ success: true, summary: buildAccessOwnerSummary(req, accessOwner) });
+        }
+
+        if (req.method === 'GET' && routePath === '/payment-config') {
+            const credentials = getRazorpayCredentials();
+            return res.json({
+                success: true,
+                ready: credentials.ready,
+                message: credentials.ready
+                    ? 'Razorpay payment gateway is configured.'
+                    : 'Razorpay payment gateway is not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to backend/.env.'
+            });
+        }
+
+        if (req.method === 'GET' && routePath === '/dashboard') {
+            const [plans, payments, paidPlanRows, attemptRows] = await Promise.all([
+                mongoStore.listPlans(),
+                mongoDb.collection('academy_payments').find({ academy_id: accessOwner.academy_id, amount: { $gt: 0 } }).sort({ created_at: -1 }).limit(12).toArray(),
+                mongoDb.collection('academy_payments').find({
+                    academy_id: accessOwner.academy_id,
+                    customer_id: Number(accessOwner.customer_id),
+                    amount: { $gt: 0 },
+                    status: 'completed'
+                }).toArray(),
+                mongoDb.collection('attempt_logs').find({ academy_id: accessOwner.academy_id }).sort({ timestamp: -1 }).limit(20).toArray()
+            ]);
+
+            const paidPlanIds = new Set(paidPlanRows.map((row) => Number(row.plan_id || 0)).filter(Boolean));
+            const instructorUsage = buildAccessUsageMetric('Instructor', 0, accessOwner.max_instructors);
+            const studentUsage = buildAccessUsageMetric('Student', 0, accessOwner.max_students);
+            return res.json({
+                success: true,
+                summary: buildAccessOwnerSummary(req, accessOwner),
+                statistics: {
+                    active_instructors: 0,
+                    active_students: 0,
+                    instructor_limit: Number(accessOwner.max_instructors || 0),
+                    student_limit: Number(accessOwner.max_students || 0)
+                },
+                usage: { instructors: instructorUsage, students: studentUsage },
+                monitoring: { instructors: [], students: [] },
+                warnings: [],
+                plans: plans.map((plan) => ({
+                    id: Number(plan.id),
+                    name: plan.name,
+                    max_instructors: Number(plan.max_instructors || 0),
+                    max_students: Number(plan.max_students || 0),
+                    price: Number(plan.price || 0),
+                    description: plan.description || '',
+                    is_paid_before: paidPlanIds.has(Number(plan.id || 0)),
+                    activation_mode: Number(plan.price || 0) <= 0
+                        ? 'free'
+                        : paidPlanIds.has(Number(plan.id || 0))
+                            ? 'reactivate'
+                            : 'purchase'
+                })),
+                payments: payments.map((payment) => ({
+                    id: Number(payment.id || 0),
+                    plan_id: Number(payment.plan_id || 0),
+                    plan_name: payment.plan_name,
+                    amount: Number(payment.amount || 0),
+                    currency: payment.currency || 'INR',
+                    status: payment.status,
+                    payment_reference: payment.payment_reference,
+                    created_at: payment.created_at
+                })),
+                activity_logs: attemptRows.map((log) => ({
+                    type: log.type,
+                    status: log.status,
+                    reason: log.reason,
+                    email: log.email,
+                    timestamp: log.timestamp
+                }))
+            });
+        }
+
+        if (req.method === 'POST' && routePath === '/orders') {
+            const planId = asPositiveInt(req.body.plan_id || req.body.planId);
+            const plan = planId ? await mongoStore.getPlan(planId) : null;
+            if (!plan) {
+                return res.status(404).json({ success: false, message: 'Selected plan was not found' });
+            }
+            if (Number(plan.price || 0) <= 0) {
+                return res.status(400).json({ success: false, message: 'The selected plan does not require payment.' });
+            }
+
+            const amountInPaise = normalizeRazorpayAmount(Math.round(Number(plan.price || 0) * 100));
+            const receipt = `rcpt_${String(accessOwner.academy_id).slice(0, 8)}_${Date.now()}`;
+            const order = await createRazorpayOrder({
+                amount: amountInPaise,
+                currency: 'INR',
+                receipt,
+                notes: {
+                    academy_id: String(accessOwner.academy_id),
+                    customer_id: String(accessOwner.customer_id),
+                    plan_id: String(plan.id)
+                }
+            });
+
+            await mongoDb.collection('academy_payment_orders').insertOne({
+                id: await mongoStore.nextSequence('academy_payment_orders'),
+                academy_id: accessOwner.academy_id,
+                customer_id: Number(accessOwner.customer_id),
+                plan_id: Number(plan.id),
+                amount: Number(order.amount || amountInPaise),
+                currency: order.currency || 'INR',
+                razorpay_order_id: order.id,
+                receipt: order.receipt || receipt,
+                status: 'created',
+                is_consumed: 0,
+                created_at: now,
+                updated_at: now
+            });
+
+            return res.json({
+                success: true,
+                key_id: assertRazorpayConfigured().keyId,
+                order: {
+                    id: order.id,
+                    amount: Number(order.amount || amountInPaise),
+                    currency: order.currency || 'INR',
+                    receipt: order.receipt || receipt
+                },
+                plan: { id: Number(plan.id), name: plan.name, price: Number(plan.price || 0) }
+            });
+        }
+
+        if (req.method === 'POST' && routePath === '/verify-payment') {
+            const razorpayOrderId = String(req.body.razorpay_order_id || '').trim();
+            const razorpayPaymentId = String(req.body.razorpay_payment_id || '').trim();
+            const razorpaySignature = String(req.body.razorpay_signature || '').trim();
+            const planId = asPositiveInt(req.body.plan_id || req.body.planId);
+            if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !planId) {
+                return res.status(400).json({ success: false, message: 'Order ID, payment ID, signature, and plan ID are required' });
+            }
+
+            const paymentOrder = await mongoDb.collection('academy_payment_orders').findOne({
+                academy_id: accessOwner.academy_id,
+                customer_id: Number(accessOwner.customer_id),
+                razorpay_order_id: razorpayOrderId
+            });
+            if (!paymentOrder) {
+                return res.status(404).json({ success: false, message: 'Matching payment order was not found' });
+            }
+            if (Number(paymentOrder.plan_id) !== Number(planId)) {
+                return res.status(400).json({ success: false, message: 'The payment order does not match the selected plan' });
+            }
+            if (!verifyRazorpaySignature(paymentOrder.razorpay_order_id, razorpayPaymentId, razorpaySignature)) {
+                return res.status(400).json({ success: false, message: 'Payment signature verification failed' });
+            }
+
+            await mongoDb.collection('academy_payment_orders').updateOne(
+                { _id: paymentOrder._id },
+                { $set: { status: 'verified', razorpay_payment_id: razorpayPaymentId, razorpay_signature: razorpaySignature, payment_status: 'verified', updated_at: now } }
+            );
+
+            return res.json({ success: true, message: 'Payment verified successfully', payment_id: razorpayPaymentId, payment_status: 'verified' });
+        }
+
+        if (req.method === 'POST' && routePath === '/subscription') {
+            const planId = asPositiveInt(req.body.plan_id || req.body.planId);
+            const plan = planId ? await mongoStore.getPlan(planId) : null;
+            if (!plan) {
+                return res.status(404).json({ success: false, message: 'Selected plan was not found' });
+            }
+
+            if (Number(plan.price || 0) > 0) {
+                const verifiedPaymentOrder = await mongoDb.collection('academy_payment_orders').findOne({
+                    academy_id: accessOwner.academy_id,
+                    customer_id: Number(accessOwner.customer_id),
+                    plan_id: Number(plan.id),
+                    status: 'verified',
+                    is_consumed: { $ne: 1 }
+                }, { sort: { updated_at: -1 } });
+
+                if (!verifiedPaymentOrder) {
+                    return res.status(402).json({ success: false, message: `Complete payment for the ${plan.name} plan before activating it.` });
+                }
+
+                await mongoDb.collection('academy_payments').insertOne({
+                    id: await mongoStore.nextSequence('academy_payments'),
+                    academy_id: accessOwner.academy_id,
+                    customer_id: Number(accessOwner.customer_id),
+                    plan_id: Number(plan.id),
+                    plan_name: plan.name,
+                    amount: Number(plan.price || 0),
+                    currency: verifiedPaymentOrder.currency || 'INR',
+                    status: 'completed',
+                    payment_reference: verifiedPaymentOrder.razorpay_payment_id || verifiedPaymentOrder.razorpay_order_id,
+                    created_at: now
+                });
+
+                await mongoDb.collection('academy_payment_orders').updateOne(
+                    { _id: verifiedPaymentOrder._id },
+                    { $set: { status: 'consumed', is_consumed: 1, updated_at: now } }
+                );
+            }
+
+            await mongoDb.collection('academies').updateOne(
+                { id: accessOwner.academy_id, customer_id: Number(accessOwner.customer_id) },
+                {
+                    $set: {
+                        plan_id: Number(plan.id),
+                        status: 'active',
+                        plan_activated_at: now,
+                        plan_expires_at: Number(plan.price || 0) > 0 ? new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000) : null,
+                        updated_at: now
+                    }
+                }
+            );
+
+            const updatedContext = await getMongoAccessOwnerContext(accessOwner.customer_id, accessOwner.academy_id);
+            return res.json({
+                success: true,
+                message: `${plan.name} plan activated successfully.`,
+                summary: buildAccessOwnerSummary(req, updatedContext)
+            });
+        }
+
+        return next();
+    } catch (error) {
+        console.error('Mongo access route error:', error);
+        return res.status(error.status || 500).json({
+            success: false,
+            message: error.message || 'Mongo access request failed',
+            error: error.details || error.message
+        });
+    }
+}
+
 app.patch('/api/access/members/:userId/access-status', accessOwnerAuth, handleAccessMemberStatusUpdate);
 app.post('/api/access/members/:userId/access-status', accessOwnerAuth, handleAccessMemberStatusUpdate);
 
@@ -5312,6 +5780,85 @@ app.get('/api/access/payment-config', accessOwnerAuth, (req, res) => {
             ? 'Razorpay payment gateway is configured.'
             : 'Razorpay payment gateway is not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to backend/.env.'
     });
+});
+
+// RAZORPAY STANDARD CHECKOUT - Create a generic order
+app.post('/api/create-order', async (req, res) => {
+    const amount = normalizeRazorpayAmount(req.body.amount);
+    const currency = String(req.body.currency || 'INR').trim().toUpperCase();
+    const receipt = String(req.body.receipt || `rcpt_${Date.now()}`).trim();
+
+    if (!amount) {
+        return res.status(400).json({
+            success: false,
+            message: 'Amount must be an integer of at least 100 paise'
+        });
+    }
+
+    try {
+        const order = await createRazorpayOrder({
+            amount,
+            currency: currency || 'INR',
+            receipt
+        });
+
+        return res.json({
+            success: true,
+            order_id: order.id,
+            amount: Number(order.amount || amount),
+            currency: order.currency || currency || 'INR'
+        });
+    } catch (error) {
+        console.error('Create generic Razorpay order error:', error);
+        return res.status(normalizeRazorpayErrorStatus(error)).json({
+            success: false,
+            message: error.message || 'Failed to create Razorpay order',
+            error: error.details || error.message
+        });
+    }
+});
+
+// RAZORPAY STANDARD CHECKOUT - Verify the payment signature
+app.post('/api/verify-payment', (req, res) => {
+    const razorpayOrderId = String(req.body.razorpay_order_id || '').trim();
+    const razorpayPaymentId = String(req.body.razorpay_payment_id || '').trim();
+    const razorpaySignature = String(req.body.razorpay_signature || '').trim();
+
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+        return res.status(400).json({
+            success: false,
+            message: 'Order ID, payment ID, and signature are required'
+        });
+    }
+
+    try {
+        const signatureIsValid = verifyRazorpaySignature(
+            razorpayOrderId,
+            razorpayPaymentId,
+            razorpaySignature
+        );
+
+        if (!signatureIsValid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Payment signature verification failed'
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: 'Payment signature verified successfully',
+            payment_id: razorpayPaymentId,
+            order_id: razorpayOrderId
+        });
+    } catch (error) {
+        console.error('Generic payment verification error:', error);
+        return res.status(normalizeRazorpayErrorStatus(error)).json({
+            success: false,
+            message: error.message || 'Payment verification failed',
+            error: error.details || error.message
+        });
+    }
 });
 
 // ACCESS OWNER - Create a Razorpay order for a paid plan
@@ -5378,7 +5925,15 @@ app.post('/api/access/orders', accessOwnerAuth, async (req, res) => {
             });
         }
 
-        const amountInPaise = planPrice * 100;
+        const amountInPaise = normalizeRazorpayAmount(Math.round(planPrice * 100));
+        if (!amountInPaise) {
+            await connection.rollback();
+            return res.status(400).json({
+                success: false,
+                message: 'Selected plan amount must be at least 100 paise'
+            });
+        }
+
         const receipt = `rcpt_${String(req.accessOwner.academy_id).slice(0, 8)}_${Date.now()}`;
         const order = await createRazorpayOrder({
             amount: amountInPaise,
@@ -5436,7 +5991,7 @@ app.post('/api/access/orders', accessOwnerAuth, async (req, res) => {
     } catch (error) {
         await connection.rollback();
         console.error('Create Razorpay order error:', error);
-        return res.status(error.status || 500).json({
+        return res.status(normalizeRazorpayErrorStatus(error)).json({
             success: false,
             message: error.message || 'Failed to create payment order',
             error: error.details || error.message
@@ -5730,7 +6285,7 @@ app.post('/api/access/verify-payment', accessOwnerAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('Payment verification error:', error);
-        return res.status(error.status || 400).json({
+        return res.status(normalizeRazorpayErrorStatus(error)).json({
             success: false,
             message: error.message || 'Payment verification failed',
             error: error.details || error.message

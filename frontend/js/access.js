@@ -2,6 +2,7 @@ const ACCESS_API_BASE = window.SkillBoostApp?.buildApiUrl('/api/access')
     || `${window.location.origin}/api/access`;
 const ACCESS_SESSION_STORAGE_KEY = 'skillboost-access-owner-session';
 const ACCESS_REQUEST_TIMEOUT_MS = 30000;
+const ACCESS_REGISTER_TIMEOUT_MS = 90000;
 
 let accessSession = readStoredSession();
 let toastTimeoutId = null;
@@ -319,7 +320,8 @@ async function handleModalRegisterSubmit(event) {
         console.log('[DEBUG] Submitting register form with payload:', payload);
         const response = await requestAccess('/register', {
             method: 'POST',
-            body: payload
+            body: payload,
+            timeoutMs: ACCESS_REGISTER_TIMEOUT_MS
         });
 
         console.log('[DEBUG] Register response:', response);
@@ -1292,7 +1294,7 @@ async function requestAccess(path, options = {}) {
         }
 
         if (error?.name === 'AbortError') {
-            throw new Error('The server is taking longer than expected to respond. If the backend just woke up after deployment, please wait a few seconds and try again.');
+            throw new Error('The server did not finish this request in time. If the backend just woke up or the database is slow, please wait a few seconds and try again.');
         }
 
         throw new Error('Unable to reach the server right now. Please check that the published backend is online and try again.');
